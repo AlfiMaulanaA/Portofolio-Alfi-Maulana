@@ -10,6 +10,9 @@ export async function GET(request: NextRequest) {
     const rtspUrl =
       "rtsp://admin:gspe-intercon@192.168.1.125:554/Streaming/Channels/101";
 
+    console.log("🎥 Starting RTSP to MJPEG conversion...");
+    console.log(`📡 RTSP Source: ${rtspUrl}`);
+
     // Set up response headers for MJPEG streaming
     const headers = new Headers({
       "Content-Type": "multipart/x-mixed-replace; boundary=frame",
@@ -92,6 +95,9 @@ export async function GET(request: NextRequest) {
               controller.enqueue(new TextEncoder().encode(endBoundary));
 
               if (frameCount % 30 === 0) {
+                console.log(
+                  `📸 Streamed ${frameCount} frames, latest frame size: ${frameData.length} bytes`
+                );
               }
             } catch (error) {
               console.error("❌ Error sending frame:", error);
@@ -109,6 +115,8 @@ export async function GET(request: NextRequest) {
         ffmpeg.stderr.on("data", (data) => {
           const message = data.toString();
           if (message.includes("frame=") || message.includes("fps=")) {
+            // Log periodic stats
+            console.log(`📊 FFmpeg: ${message.trim()}`);
           } else if (message.includes("error") || message.includes("Error")) {
             console.error(`❌ FFmpeg Error: ${message}`);
           }
@@ -120,6 +128,7 @@ export async function GET(request: NextRequest) {
         });
 
         ffmpeg.on("close", (code) => {
+          console.log(`🔚 FFmpeg process closed with code ${code}`);
           if (code !== 0) {
             controller.error(
               new Error(`FFmpeg process exited with code ${code}`)
@@ -131,9 +140,11 @@ export async function GET(request: NextRequest) {
 
         // Handle client disconnect
         request.signal.addEventListener("abort", () => {
+          console.log("🔌 Client disconnected, killing FFmpeg process");
           ffmpeg.kill("SIGTERM");
           setTimeout(() => {
             if (!ffmpeg.killed) {
+              console.log("🔪 Force killing FFmpeg process");
               ffmpeg.kill("SIGKILL");
             }
           }, 5000);
