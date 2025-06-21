@@ -28,11 +28,16 @@ export class ZKTecoService {
   private static instance: ZKTecoService;
   private deviceIp: string;
   private devicePort: number;
+  private devicePassword: string;
+  private timeout: number;
   private pythonScriptPath: string;
 
   private constructor() {
+    // Use environment variables for ZKTeco configuration
     this.deviceIp = process.env.ZKTECO_DEVICE_IP || "192.168.1.201";
     this.devicePort = Number.parseInt(process.env.ZKTECO_DEVICE_PORT || "4370");
+    this.devicePassword = process.env.ZKTECO_DEVICE_PASSWORD || "0";
+    this.timeout = Number.parseInt(process.env.ZKTECO_TIMEOUT || "5");
     this.pythonScriptPath = path.join(process.cwd(), "scripts", "zkteco");
 
     // Create scripts directory if it doesn't exist
@@ -62,10 +67,15 @@ export class ZKTecoService {
         scriptPath,
         this.deviceIp,
         this.devicePort.toString(),
+        this.devicePassword,
+        this.timeout.toString(),
         ...args,
       ];
 
-      console.log(`🔄 Executing ZKTeco script: ${scriptName}`, pythonArgs);
+      console.log(`🔄 Executing ZKTeco script: ${scriptName}`, {
+        ip: this.deviceIp,
+        port: this.devicePort,
+      });
 
       const pythonProcess = spawn("python", pythonArgs);
       let stdout = "";
@@ -246,5 +256,14 @@ export class ZKTecoService {
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
+  }
+
+  // Getter methods for configuration
+  public getDeviceConfig() {
+    return {
+      ip: this.deviceIp,
+      port: this.devicePort,
+      timeout: this.timeout,
+    };
   }
 }

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Hand, Target, Wifi, WifiOff, Loader2, RefreshCw } from "lucide-react";
 import { useMqttPalmRecognition } from "@/hooks/use-mqtt-palm-recognition";
+import { PalmImageViewer } from "./palm-image-viewer";
 
 export function PalmRecognitionSection() {
   const { state, fetchTodayStats } = useMqttPalmRecognition();
@@ -53,7 +54,7 @@ export function PalmRecognitionSection() {
         </div>
         <Button variant="outline" size="sm" onClick={fetchTodayStats}>
           <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
+          Refresh Stats
         </Button>
       </div>
 
@@ -114,75 +115,10 @@ export function PalmRecognitionSection() {
         </Card>
       </div>
 
-      {/* Palm Scanner Feeds - Larger */}
+      {/* Palm Scanner Feeds - Auto-refreshing every 5 seconds */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* RGB Feed */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between">
-              <span>RGB Camera</span>
-              <Badge variant="default" className="bg-blue-500">
-                RGB
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="relative aspect-video rounded-lg bg-black overflow-hidden">
-              <img
-                src={
-                  process.env.NEXT_PUBLIC_PALM_RGB_IMAGE_URL ||
-                  "/placeholder.svg"
-                }
-                alt="RGB Palm Scanner"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = "/placeholder.svg?height=360&width=480";
-                }}
-              />
-              {state.isConnected && (
-                <div className="absolute top-3 right-3">
-                  <Badge variant="destructive" className="animate-pulse">
-                    ● LIVE
-                  </Badge>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Infrared Feed */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between">
-              <span>Infrared Camera</span>
-              <Badge variant="secondary" className="bg-red-500 text-white">
-                IR
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="relative aspect-video rounded-lg bg-black overflow-hidden">
-              <img
-                src={
-                  process.env.NEXT_PUBLIC_PALM_IR_IMAGE_URL ||
-                  "/placeholder.svg"
-                }
-                alt="IR Palm Scanner"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = "/placeholder.svg?height=360&width=480";
-                }}
-              />
-              {state.isConnected && (
-                <div className="absolute top-3 right-3">
-                  <Badge variant="destructive" className="animate-pulse">
-                    ● LIVE
-                  </Badge>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <PalmImageViewer title="RGB Camera" type="rgb" />
+        <PalmImageViewer title="Infrared Camera" type="ir" />
       </div>
 
       {/* Recognition Results */}

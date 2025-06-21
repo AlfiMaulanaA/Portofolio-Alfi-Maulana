@@ -22,7 +22,12 @@ export class FaceRecognitionService {
   private streamUrl: string;
 
   private constructor() {
-    this.apiUrl = "https://face.iotech.my.id/verify";
+    // Use environment variable for Face API URL
+    const baseUrl =
+      process.env.NEXT_PUBLIC_FACE_VERIFY_API_URL ||
+      process.env.FACE_API_BASE_URL ||
+      "https://face.iotech.my.id";
+    this.apiUrl = baseUrl.endsWith("/verify") ? baseUrl : `${baseUrl}/verify`;
     this.streamUrl = "/api/mjpeg";
   }
 
@@ -71,8 +76,6 @@ export class FaceRecognitionService {
     imageBase64: string
   ): Promise<FaceVerificationResponse> {
     try {
-      console.log("🔍 Sending verification request to:", this.apiUrl);
-
       const response = await fetch(this.apiUrl, {
         method: "POST",
         headers: {

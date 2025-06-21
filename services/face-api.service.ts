@@ -1,47 +1,26 @@
-interface PersonnelCreateRequest {
-  name: string;
-  department: string;
-  entity: string;
-  authorized: boolean;
-}
-
-interface PersonnelCreateResponse {
-  id: number;
-  success: boolean;
-}
-
-interface PhotoUploadRequest {
-  image: string; // base64 encoded image
-}
-
-interface PhotoUploadResponse {
-  success: boolean;
-}
-
-interface RefreshResponse {
-  success: boolean;
-}
-
-interface DeletePersonnelResponse {
-  message: string;
-}
-
-interface PersonnelResponse {
+interface FaceApiUser {
   id: number;
   name: string;
-  department: string;
-  entity: string;
-  authorized: boolean;
-  created_at?: string;
-  updated_at?: string;
+  created_at: string;
+}
+
+interface FaceApiResponse {
+  success: boolean;
+  message?: string;
+  data?: any;
+  error?: string;
 }
 
 export class FaceApiService {
   private static instance: FaceApiService;
-  private apiUrl: string;
+  private baseUrl: string;
 
   private constructor() {
-    this.apiUrl = "https://face.iotech.my.id";
+    // Use environment variable for Face API base URL
+    this.baseUrl =
+      process.env.FACE_API_BASE_URL ||
+      process.env.NEXT_PUBLIC_FACE_VERIFY_API_URL?.replace("/verify", "") ||
+      "https://face.iotech.my.id";
   }
 
   public static getInstance(): FaceApiService {
@@ -51,18 +30,17 @@ export class FaceApiService {
     return FaceApiService.instance;
   }
 
-  public async createPersonnel(
-    data: PersonnelCreateRequest
-  ): Promise<PersonnelCreateResponse> {
+  public async createUser(userData: {
+    name: string;
+    image: string;
+  }): Promise<FaceApiResponse> {
     try {
-      console.log("🔄 Creating personnel:", data);
-
-      const response = await fetch(`${this.apiUrl}/personnel`, {
+      const response = await fetch(`${this.baseUrl}/users`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(userData),
       });
 
       if (!response.ok) {
@@ -70,64 +48,20 @@ export class FaceApiService {
       }
 
       const result = await response.json();
-      console.log("✅ Personnel created:", result);
 
-      return result;
+      return { success: true, data: result };
     } catch (error) {
-      console.error("❌ Personnel creation error:", error);
-      throw new Error(
-        `Personnel creation failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
+      console.error("❌ Face API user creation failed:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
   }
 
-  public async uploadPhoto(
-    personnelId: number,
-    imageBase64: string
-  ): Promise<PhotoUploadResponse> {
+  public async deleteUser(userId: number): Promise<FaceApiResponse> {
     try {
-      console.log("🔄 Uploading photo for personnel:", personnelId);
-
-      const response = await fetch(
-        `${this.apiUrl}/personnel/${personnelId}/photo-b64`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            image: imageBase64,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log("✅ Photo uploaded:", result);
-
-      return result;
-    } catch (error) {
-      console.error("❌ Photo upload error:", error);
-      throw new Error(
-        `Photo upload failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    }
-  }
-
-  public async deletePersonnel(
-    personnelId: number
-  ): Promise<DeletePersonnelResponse> {
-    try {
-      console.log("🔄 Deleting personnel:", personnelId);
-
-      const response = await fetch(`${this.apiUrl}/personnel/${personnelId}`, {
+      const response = await fetch(`${this.baseUrl}/users/${userId}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -139,24 +73,20 @@ export class FaceApiService {
       }
 
       const result = await response.json();
-      console.log("✅ Personnel deleted:", result);
 
-      return result;
+      return { success: true, data: result };
     } catch (error) {
-      console.error("❌ Personnel deletion error:", error);
-      throw new Error(
-        `Personnel deletion failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
+      console.error("❌ Face API user deletion failed:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
   }
 
-  public async getPersonnel(personnelId: number): Promise<PersonnelResponse> {
+  public async getAllUsers(): Promise<FaceApiResponse> {
     try {
-      console.log("🔄 Getting personnel:", personnelId);
-
-      const response = await fetch(`${this.apiUrl}/personnel/${personnelId}`, {
+      const response = await fetch(`${this.baseUrl}/users`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -168,28 +98,28 @@ export class FaceApiService {
       }
 
       const result = await response.json();
-      console.log("✅ Personnel retrieved:", result);
 
-      return result;
+      return { success: true, data: result };
     } catch (error) {
-      console.error("❌ Personnel retrieval error:", error);
-      throw new Error(
-        `Personnel retrieval failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
+      console.error("❌ Face API get users failed:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
   }
 
-  public async getAllPersonnel(): Promise<PersonnelResponse[]> {
+  public async updateUser(
+    userId: number,
+    userData: { name?: string; image?: string }
+  ): Promise<FaceApiResponse> {
     try {
-      console.log("🔄 Getting all personnel...");
-
-      const response = await fetch(`${this.apiUrl}/personnel`, {
-        method: "GET",
+      const response = await fetch(`${this.baseUrl}/users/${userId}`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
+        body: JSON.stringify(userData),
       });
 
       if (!response.ok) {
@@ -197,45 +127,14 @@ export class FaceApiService {
       }
 
       const result = await response.json();
-      console.log("✅ All personnel retrieved:", result);
 
-      return result;
+      return { success: true, data: result };
     } catch (error) {
-      console.error("❌ All personnel retrieval error:", error);
-      throw new Error(
-        `All personnel retrieval failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    }
-  }
-
-  public async refreshDatabase(): Promise<RefreshResponse> {
-    try {
-      console.log("🔄 Refreshing face database...");
-
-      const response = await fetch(`${this.apiUrl}/refresh`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log("✅ Database refreshed:", result);
-
-      return result;
-    } catch (error) {
-      console.error("❌ Database refresh error:", error);
-      throw new Error(
-        `Database refresh failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
+      console.error("❌ Face API user update failed:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
   }
 }

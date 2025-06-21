@@ -1,14 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 
-// Force dynamic rendering - prevent static generation during build
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
-
 export async function GET(request: NextRequest) {
   try {
+    // Build RTSP URL from environment variables
+    const cameraIp = process.env.RTSP_CAMERA_IP || "192.168.0.64";
+    const cameraPort = process.env.RTSP_CAMERA_PORT || "554";
+    const cameraUsername = process.env.RTSP_CAMERA_USERNAME || "admin";
+    const cameraPassword = process.env.RTSP_CAMERA_PASSWORD || "gspe-intercon";
+    const cameraChannel = process.env.RTSP_CAMERA_CHANNEL || "101";
+
     const rtspUrl =
-      "rtsp://admin:gspe-intercon@192.168.1.125:554/Streaming/Channels/101";
+      process.env.RTSP_CAMERA_URL ||
+      `rtsp://${cameraUsername}:${cameraPassword}@${cameraIp}:${cameraPort}/Streaming/Channels/${cameraChannel}`;
 
     // Set up response headers for MJPEG streaming
     const headers = new Headers({
@@ -110,6 +114,7 @@ export async function GET(request: NextRequest) {
           const message = data.toString();
           if (message.includes("frame=") || message.includes("fps=")) {
             // Log periodic stats
+            console.log(`📊 FFmpeg: ${message.trim()}`);
           } else if (message.includes("error") || message.includes("Error")) {
             console.error(`❌ FFmpeg Error: ${message}`);
           }
@@ -121,6 +126,7 @@ export async function GET(request: NextRequest) {
         });
 
         ffmpeg.on("close", (code) => {
+          console.log(`🔚 FFmpeg process closed with code ${code}`);
           if (code !== 0) {
             controller.error(
               new Error(`FFmpeg process exited with code ${code}`)
@@ -132,18 +138,14 @@ export async function GET(request: NextRequest) {
 
         // Handle client disconnect
         request.signal.addEventListener("abort", () => {
-          console.log("🔌 Client disconnected, killing FFmpeg process");
           ffmpeg.kill("SIGTERM");
           setTimeout(() => {
             if (!ffmpeg.killed) {
-              console.log("🔪 Force killing FFmpeg process");
               ffmpeg.kill("SIGKILL");
             }
           }, 5000);
           controller.close();
         });
-
-        console.log("✅ MJPEG streaming started successfully");
       },
     });
 
@@ -154,8 +156,11 @@ export async function GET(request: NextRequest) {
       {
         error: "Failed to start MJPEG stream",
         details: error instanceof Error ? error.message : "Unknown error",
-        rtsp_url:
-          "rtsp://admin:gspe-intercon@192.168.1.125:554/Streaming/Channels/101",
+        rtsp_config: {
+          ip: process.env.RTSP_CAMERA_IP || "not-configured",
+          port: process.env.RTSP_CAMERA_PORT || "not-configured",
+          channel: process.env.RTSP_CAMERA_CHANNEL || "not-configured",
+        },
       },
       { status: 500 }
     );

@@ -3,10 +3,10 @@ import sys
 import json
 from zk import ZK
 
-def test_connection(ip, port):
+def test_connection(ip, port, password="0", timeout=5):
     try:
-        # Create ZK instance
-        zk = ZK(ip, port=int(port), timeout=5, password=0, force_udp=False, ommit_ping=False)
+        # Create ZK instance with environment-based configuration
+        zk = ZK(ip, port=int(port), timeout=int(timeout), password=int(password), force_udp=False, ommit_ping=False)
         
         # Connect to device
         conn = zk.connect()
@@ -32,13 +32,14 @@ def test_connection(ip, port):
             "success": True,
             "device_info": {
                 "ip": ip,
-                "port": port,
+                "port": int(port),
                 "firmware": firmware_version,
                 "serial": serialnumber,
                 "platform": platform,
                 "name": device_name,
                 "users": user_count,
-                "attendances": attendance_count
+                "attendances": attendance_count,
+                "timeout": int(timeout)
             }
         }
         
@@ -49,18 +50,24 @@ def test_connection(ip, port):
         error_result = {
             "success": False,
             "error": str(e),
-            "device": f"{ip}:{port}"
+            "device": f"{ip}:{port}",
+            "config": {
+                "timeout": int(timeout),
+                "password": "***"
+            }
         }
         print(json.dumps(error_result))
         return False
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print(json.dumps({"success": False, "error": "Usage: python test_connection.py <ip> <port>"}))
+    if len(sys.argv) < 3:
+        print(json.dumps({"success": False, "error": "Usage: python test_connection.py <ip> <port> [password] [timeout]"}))
         sys.exit(1)
     
     ip = sys.argv[1]
     port = sys.argv[2]
+    password = sys.argv[3] if len(sys.argv) > 3 else "0"
+    timeout = sys.argv[4] if len(sys.argv) > 4 else "5"
     
-    success = test_connection(ip, port)
+    success = test_connection(ip, port, password, timeout)
     sys.exit(0 if success else 1)
