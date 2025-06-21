@@ -168,6 +168,7 @@ export function ZKTecoStatusIndicator() {
                 </p>
               </div>
             )}
+            s
           </div>
         )}
       </CardContent>

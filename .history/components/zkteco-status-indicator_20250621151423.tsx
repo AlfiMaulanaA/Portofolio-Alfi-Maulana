@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wifi, WifiOff, RefreshCw, Users, Clock, Server } from "lucide-react";
+import { Wifi, WifiOff, RefreshCw, Settings, Users, Clock } from "lucide-react";
 
 interface ZKTecoStatus {
   success: boolean;
@@ -57,41 +57,37 @@ export function ZKTecoStatusIndicator() {
   useEffect(() => {
     checkZKTecoStatus();
 
-    // Auto-refresh every 60 seconds (less frequent)
-    const interval = setInterval(checkZKTecoStatus, 60000);
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(checkZKTecoStatus, 30000);
     return () => clearInterval(interval);
   }, []);
 
   const deviceInfo = status?.data?.device_info;
 
   return (
-    <Card className="w-full border-muted">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <div className="flex items-center gap-2">
-          <Server className="h-4 w-4 text-muted-foreground" />
-          <div>
-            <CardTitle className="text-base font-medium">
-              ZKTeco Device
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Access control integration status
-            </CardDescription>
-          </div>
+    <Card className="w-full">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <div>
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            ZKTeco Access Control
+          </CardTitle>
+          <CardDescription>Device connection and status</CardDescription>
         </div>
         <div className="flex items-center gap-2">
           {status?.success ? (
-            <Badge variant="default" className="bg-green-500 text-xs">
+            <Badge variant="default" className="bg-green-500">
               <Wifi className="h-3 w-3 mr-1" />
               Connected
             </Badge>
           ) : (
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="destructive">
               <WifiOff className="h-3 w-3 mr-1" />
               Offline
             </Badge>
           )}
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={checkZKTecoStatus}
             disabled={loading}
@@ -100,74 +96,68 @@ export function ZKTecoStatusIndicator() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent>
         {deviceInfo ? (
           <div className="space-y-3">
-            {/* Device Info - Compact Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-              <div className="space-y-1">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
                 <p className="text-muted-foreground">Device IP</p>
-                <p className="font-medium text-sm">
+                <p className="font-medium">
                   {deviceInfo.ip}:{deviceInfo.port}
                 </p>
               </div>
-              <div className="space-y-1">
+              <div>
+                <p className="text-muted-foreground">Serial Number</p>
+                <p className="font-medium">{deviceInfo.serial}</p>
+              </div>
+              <div>
                 <p className="text-muted-foreground">Firmware</p>
-                <p className="font-medium text-sm">{deviceInfo.firmware}</p>
+                <p className="font-medium">{deviceInfo.firmware}</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-muted-foreground">Serial</p>
-                <p className="font-medium text-sm">{deviceInfo.serial}</p>
-              </div>
-              <div className="space-y-1">
+              <div>
                 <p className="text-muted-foreground">Platform</p>
-                <p className="font-medium text-sm">{deviceInfo.platform}</p>
+                <p className="font-medium">{deviceInfo.platform}</p>
               </div>
             </div>
 
-            {/* Stats - Horizontal Layout */}
-            <div className="flex gap-6 pt-2 border-t">
+            <div className="flex gap-4 pt-2">
               <div className="flex items-center gap-2 text-sm">
                 <Users className="h-4 w-4 text-blue-500" />
                 <span className="text-muted-foreground">Users:</span>
-                <span className="font-semibold">{deviceInfo.users}</span>
+                <span className="font-medium">{deviceInfo.users}</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <Clock className="h-4 w-4 text-green-500" />
                 <span className="text-muted-foreground">Records:</span>
-                <span className="font-semibold">
-                  {deviceInfo.attendances.toLocaleString()}
-                </span>
+                <span className="font-medium">{deviceInfo.attendances}</span>
               </div>
-              {lastChecked && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground ml-auto">
-                  <span>Updated: {lastChecked.toLocaleTimeString()}</span>
-                </div>
-              )}
             </div>
           </div>
         ) : (
-          <div className="text-sm">
+          <div className="text-sm text-muted-foreground">
             {loading ? (
-              <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="flex items-center gap-2">
                 <RefreshCw className="h-4 w-4 animate-spin" />
-                Testing connection to ZKTeco device...
+                Testing connection...
               </div>
             ) : (
-              <div className="space-y-2">
-                <p className="text-orange-600 font-medium">
-                  {status?.message || "Device not connected"}
+              <div>
+                <p className="text-red-500 mb-2">
+                  {status?.message || "No connection"}
                 </p>
                 {status?.error && (
-                  <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
-                    Error: {status.error}
+                  <p className="text-xs text-muted-foreground">
+                    {status.error}
                   </p>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Check device connection and network settings
-                </p>
               </div>
             )}
+          </div>
+        )}
+
+        {lastChecked && (
+          <div className="text-xs text-muted-foreground mt-3 pt-3 border-t">
+            Last checked: {lastChecked.toLocaleTimeString()}
           </div>
         )}
       </CardContent>

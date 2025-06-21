@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   try {
     const rtspUrl =
-      "rtsp://admin:gspe-intercon@192.168.1.125:554/Streaming/Channels/101";
+      "rtsp://admin:gspe-intercon@192.168.0.64:554/Streaming/Channels/101";
 
     // Set up response headers for MJPEG streaming
     const headers = new Headers({
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
         error: "Failed to start MJPEG stream",
         details: error instanceof Error ? error.message : "Unknown error",
         rtsp_url:
-          "rtsp://admin:gspe-intercon@192.168.1.125:554/Streaming/Channels/101",
+          "rtsp://admin:gspe-intercon@192.168.0.64:554/Streaming/Channels/101",
       },
       { status: 500 }
     );
