@@ -23,8 +23,6 @@ export async function POST() {
       )
       .run(cutoffDate);
 
-    console.log(`✅ Cleaned up ${result.changes} old history logs`);
-
     return NextResponse.json({
       success: true,
       message: `Successfully cleaned up ${result.changes} old history logs`,

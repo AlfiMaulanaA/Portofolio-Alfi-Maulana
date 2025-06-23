@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,8 +9,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Camera, CheckCircle, RotateCcw, Upload, Loader2 } from "lucide-react";
-import { FaceRecognitionService } from "@/services/face-recognition.service";
+import {
+  Camera,
+  CheckCircle,
+  RotateCcw,
+  Upload,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 import { FaceApiService } from "@/services/face-api.service";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -21,6 +27,7 @@ interface User {
   id: number;
   name: string;
   email: string;
+  face_api_id?: number;
 }
 
 interface FaceRegistrationModalProps {
@@ -37,57 +44,85 @@ export function FaceRegistrationModal({
   user,
 }: FaceRegistrationModalProps) {
   const [status, setStatus] = useState<
-    "idle" | "streaming" | "captured" | "uploading" | "complete" | "error"
+    | "idle"
+    | "streaming"
+    | "countdown"
+    | "captured"
+    | "uploading"
+    | "complete"
+    | "error"
   >("idle");
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [streamError, setStreamError] = useState<string | null>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const streamIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(5);
+  const [streamUrl, setStreamUrl] = useState<string>("");
 
-  const faceRecognitionService = FaceRecognitionService.getInstance();
   const faceApiService = FaceApiService.getInstance();
 
+  // Start camera stream immediately when modal opens
+  useEffect(() => {
+    if (isOpen && user) {
+      startCameraStream();
+    }
+    return () => {
+      // Cleanup when modal closes
+      setStatus("idle");
+      setCapturedImage(null);
+      setError(null);
+      setCountdown(5);
+    };
+  }, [isOpen, user]);
+
   // Start camera stream
-  const startStream = () => {
+  const startCameraStream = () => {
     setStatus("streaming");
-    setStreamError(null);
-    setCapturedImage(null);
-
-    // Start streaming from MJPEG endpoint
-    if (imgRef.current) {
-      imgRef.current.src =
-        faceRecognitionService.getStreamUrl() + "?t=" + Date.now();
-    }
-
-    // Refresh stream every 100ms to ensure it stays live
-    streamIntervalRef.current = setInterval(() => {
-      if (imgRef.current && status === "streaming") {
-        imgRef.current.src =
-          faceRecognitionService.getStreamUrl() + "?t=" + Date.now();
-      }
-    }, 100);
+    setError(null);
+    // Generate unique stream URL to avoid caching
+    const url = `/api/mjpeg?t=${Date.now()}`;
+    setStreamUrl(url);
   };
 
-  // Stop camera stream
-  const stopStream = () => {
-    if (streamIntervalRef.current) {
-      clearInterval(streamIntervalRef.current);
-      streamIntervalRef.current = null;
-    }
+  // Start countdown and auto-capture
+  const startCountdownCapture = () => {
+    setStatus("countdown");
+    setCountdown(5);
+
+    const countdownInterval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownInterval);
+          // Auto capture after countdown
+          setTimeout(() => {
+            captureFrame();
+          }, 100);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
-  // Capture frame from stream
+  // Capture frame from RTSP
   const captureFrame = async () => {
     try {
-      if (!imgRef.current) {
-        throw new Error("Camera not ready");
+      setStatus("capturing");
+      console.log("📸 Capturing frame from RTSP...");
+
+      const response = await fetch("/api/capture-frame", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to capture frame");
       }
 
-      // Capture frame from RTSP stream
-      const imageBase64 = await faceRecognitionService.captureFrameFromRTSP();
-      setCapturedImage(imageBase64);
+      setCapturedImage(result.image);
       setStatus("captured");
-      stopStream();
 
       MySwal.fire({
         title: "📸 Photo Captured!",
@@ -100,32 +135,31 @@ export function FaceRegistrationModal({
         toast: true,
       });
     } catch (error) {
-      console.error("Capture error:", error);
-      setStreamError(
-        error instanceof Error ? error.message : "Failed to capture frame"
-      );
+      console.error("❌ Capture error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to capture frame";
+      setError(errorMessage);
       setStatus("error");
 
       MySwal.fire({
         title: "❌ Capture Failed",
-        text:
-          error instanceof Error ? error.message : "Failed to capture frame",
+        text: errorMessage,
         icon: "error",
         position: "top-end",
         toast: true,
-        timer: 3000,
+        timer: 4000,
       });
     }
   };
 
-  // Retake photo
+  // Retake photo - restart countdown
   const retakePhoto = () => {
     setCapturedImage(null);
-    setStreamError(null);
-    startStream();
+    setError(null);
+    startCameraStream();
   };
 
-  // Upload photo to Face API
+  // Upload photo and register biometric
   const uploadPhoto = async () => {
     if (!capturedImage || !user) return;
 
@@ -143,8 +177,49 @@ export function FaceRegistrationModal({
         },
       });
 
-      // Upload photo to Face API (assuming user ID maps to personnel ID)
-      await faceApiService.uploadPhoto(user.id, capturedImage);
+      // If user doesn't have face_api_id, create personnel first
+      let faceApiId = user.face_api_id;
+
+      if (!faceApiId) {
+        console.log("👤 Creating personnel for user:", user.name);
+        const personnelResult = await faceApiService.createPersonnel({
+          name: user.name,
+          department: "Default",
+          entity: "Company",
+          authorized: true,
+        });
+
+        if (!personnelResult.success || !personnelResult.id) {
+          throw new Error("Failed to create personnel in Face API");
+        }
+
+        faceApiId = personnelResult.id;
+        console.log("✅ Personnel created with ID:", faceApiId);
+      }
+
+      // Upload photo to Face API
+      console.log("📤 Uploading photo for personnel ID:", faceApiId);
+      await faceApiService.uploadPhoto(faceApiId, capturedImage);
+
+      // Register biometric in local database
+      console.log("📝 Registering face biometric in database...");
+      const biometricResponse = await fetch(
+        `/api/users/${user.id}/register-biometric`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type: "face",
+          }),
+        }
+      );
+
+      const biometricResult = await biometricResponse.json();
+      if (!biometricResult.success) {
+        throw new Error("Failed to register biometric in database");
+      }
 
       // Refresh face database
       await faceApiService.refreshDatabase();
@@ -166,8 +241,11 @@ export function FaceRegistrationModal({
         handleClose();
       }, 1500);
     } catch (error) {
-      console.error("Upload error:", error);
+      console.error("❌ Upload error:", error);
       setStatus("error");
+      setError(
+        error instanceof Error ? error.message : "Failed to upload photo"
+      );
 
       MySwal.fire({
         title: "❌ Upload Failed",
@@ -180,19 +258,12 @@ export function FaceRegistrationModal({
 
   // Handle modal close
   const handleClose = () => {
-    stopStream();
     setStatus("idle");
     setCapturedImage(null);
-    setStreamError(null);
+    setError(null);
+    setCountdown(5);
     onClose();
   };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopStream();
-    };
-  }, []);
 
   if (!user) return null;
 
@@ -213,37 +284,47 @@ export function FaceRegistrationModal({
             </p>
             <p className="font-medium">{user.name}</p>
             <p className="text-sm text-muted-foreground">{user.email}</p>
+            {user.face_api_id && (
+              <Badge variant="secondary" className="mt-1">
+                Face API ID: {user.face_api_id}
+              </Badge>
+            )}
           </div>
 
           <div className="flex flex-col items-center space-y-4">
-            {/* Camera Stream / Captured Image */}
+            {/* Camera Preview / Captured Image */}
             <div className="relative w-full max-w-md">
               <div className="aspect-video bg-black rounded-lg overflow-hidden border-2 border-dashed border-muted-foreground/25">
-                {status === "idle" && (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <Camera className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">
-                        Click Start Camera to begin
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 {status === "streaming" && (
                   <>
                     <img
-                      ref={imgRef}
+                      src={streamUrl || "/placeholder.svg"}
                       alt="Camera stream"
                       className="w-full h-full object-cover"
-                      onError={() =>
-                        setStreamError("Failed to load camera stream")
-                      }
+                      onError={() => setError("Failed to load camera stream")}
                     />
                     <div className="absolute top-2 right-2">
                       <Badge variant="destructive" className="animate-pulse">
                         🔴 LIVE
                       </Badge>
+                    </div>
+                  </>
+                )}
+
+                {status === "countdown" && (
+                  <>
+                    <img
+                      src={streamUrl || "/placeholder.svg"}
+                      alt="Camera stream"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <div className="bg-blue-500 text-white p-8 rounded-full">
+                        <div className="text-6xl font-bold text-center">
+                          {countdown}
+                        </div>
+                        <p className="text-center mt-2">Get Ready!</p>
+                      </div>
                     </div>
                   </>
                 )}
@@ -267,7 +348,7 @@ export function FaceRegistrationModal({
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center text-white">
                       <Loader2 className="h-12 w-12 mx-auto mb-2 animate-spin" />
-                      <p className="text-sm">Uploading...</p>
+                      <p className="text-sm">Uploading to Face API...</p>
                     </div>
                   </div>
                 )}
@@ -282,37 +363,35 @@ export function FaceRegistrationModal({
                     </div>
                   </div>
                 )}
-              </div>
 
-              {streamError && (
-                <div className="absolute inset-0 flex items-center justify-center bg-red-50 rounded-lg">
-                  <div className="text-center">
-                    <p className="text-sm text-red-600 mb-2">Camera Error</p>
-                    <p className="text-xs text-red-500">{streamError}</p>
+                {status === "error" && (
+                  <div className="flex items-center justify-center h-full bg-red-50">
+                    <div className="text-center">
+                      <AlertCircle className="h-12 w-12 mx-auto mb-2 text-red-500" />
+                      <p className="text-sm text-red-700">Error occurred</p>
+                      {error && (
+                        <p className="text-xs text-red-600 mt-1">{error}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Action Buttons */}
             <div className="flex gap-2 w-full max-w-md">
-              {status === "idle" && (
-                <Button onClick={startStream} className="flex-1">
+              {status === "streaming" && (
+                <Button onClick={startCountdownCapture} className="flex-1">
                   <Camera className="h-4 w-4 mr-2" />
-                  Start Camera
+                  Capture Photo (5s countdown)
                 </Button>
               )}
 
-              {status === "streaming" && (
-                <>
-                  <Button onClick={captureFrame} className="flex-1">
-                    <Camera className="h-4 w-4 mr-2" />
-                    Capture Photo
-                  </Button>
-                  <Button variant="outline" onClick={handleClose}>
-                    Cancel
-                  </Button>
-                </>
+              {status === "countdown" && (
+                <Button disabled className="flex-1">
+                  <Camera className="h-4 w-4 mr-2" />
+                  Capturing in {countdown}s...
+                </Button>
               )}
 
               {status === "captured" && (
@@ -330,7 +409,7 @@ export function FaceRegistrationModal({
 
               {status === "error" && (
                 <>
-                  <Button onClick={startStream} className="flex-1">
+                  <Button onClick={startCameraStream} className="flex-1">
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Try Again
                   </Button>
@@ -339,15 +418,27 @@ export function FaceRegistrationModal({
                   </Button>
                 </>
               )}
+
+              {(status === "streaming" || status === "error") && (
+                <Button variant="outline" onClick={handleClose}>
+                  Cancel
+                </Button>
+              )}
             </div>
 
             {/* Instructions */}
             <div className="text-center text-sm text-muted-foreground max-w-md">
-              {status === "idle" && (
-                <p>Start the camera to begin face registration</p>
-              )}
               {status === "streaming" && (
-                <p>Position your face in the center and click Capture Photo</p>
+                <p>
+                  Position your face in the center and click "Capture Photo" to
+                  start 5-second countdown
+                </p>
+              )}
+              {status === "countdown" && (
+                <p>
+                  Get ready! Photo will be taken automatically in {countdown}{" "}
+                  seconds
+                </p>
               )}
               {status === "captured" && (
                 <p>Review your photo. Upload when ready or retake if needed</p>
@@ -357,6 +448,9 @@ export function FaceRegistrationModal({
               )}
               {status === "complete" && (
                 <p>Face registration completed successfully!</p>
+              )}
+              {status === "error" && (
+                <p>An error occurred. Please try again or contact support</p>
               )}
             </div>
           </div>

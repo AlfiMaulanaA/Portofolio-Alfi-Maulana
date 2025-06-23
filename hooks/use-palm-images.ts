@@ -53,7 +53,7 @@ export function usePalmImages() {
 
     // Set up interval for auto-refresh
     const refreshInterval = Number.parseInt(
-      process.env.NEXT_PUBLIC_PALM_IMAGE_REFRESH_INTERVAL || "5000"
+      process.env.NEXT_PUBLIC_PALM_IMAGE_REFRESH_INTERVAL || "50000"
     );
 
     const interval = setInterval(refreshImages, refreshInterval);

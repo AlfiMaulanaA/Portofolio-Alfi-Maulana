@@ -11,12 +11,6 @@ interface ZKTecoUser {
   user_id: string;
 }
 
-interface ZKTecoFingerprint {
-  uid: number;
-  fid: number; // Finger ID (0-9)
-  template: string;
-}
-
 interface ZKTecoResponse {
   success: boolean;
   message?: string;
@@ -31,6 +25,10 @@ export class ZKTecoService {
   private devicePassword: string;
   private timeout: number;
   private pythonScriptPath: string;
+  private connectionStatus: { connected: boolean; lastChecked: Date | null } = {
+    connected: false,
+    lastChecked: null,
+  };
 
   private constructor() {
     // Use environment variables for ZKTeco configuration
@@ -72,27 +70,42 @@ export class ZKTecoService {
         ...args,
       ];
 
-      console.log(`🔄 Executing ZKTeco script: ${scriptName}`, {
-        ip: this.deviceIp,
-        port: this.devicePort,
-      });
+      console.log(`🔄 Executing ZKTeco script: ${scriptName}`);
+      console.log(`📝 Python command: python ${pythonArgs.join(" ")}`);
 
       const pythonProcess = spawn("python", pythonArgs);
       let stdout = "";
       let stderr = "";
 
       pythonProcess.stdout.on("data", (data) => {
-        stdout += data.toString();
+        const output = data.toString();
+        stdout += output;
+        // Log real-time output for debugging
+        console.log(`📤 Python stdout: ${output.trim()}`);
       });
 
       pythonProcess.stderr.on("data", (data) => {
-        stderr += data.toString();
+        const error = data.toString();
+        stderr += error;
+        // Log real-time errors for debugging
+        console.error(`📥 Python stderr: ${error.trim()}`);
       });
 
       pythonProcess.on("close", (code) => {
+        console.log(`🔚 Python process closed with code: ${code}`);
+        console.log(`📝 Full stdout: ${stdout}`);
+        if (stderr) {
+          console.error(`📝 Full stderr: ${stderr}`);
+        }
+
         if (code === 0) {
           try {
-            const result = JSON.parse(stdout.trim());
+            // Try to parse the last line as JSON (the result)
+            const lines = stdout.trim().split("\n");
+            const lastLine = lines[lines.length - 1];
+            console.log(`🔍 Parsing last line: ${lastLine}`);
+
+            const result = JSON.parse(lastLine);
             console.log(`✅ ZKTeco ${scriptName} success:`, result);
             resolve({ success: true, data: result });
           } catch (error) {
@@ -103,11 +116,10 @@ export class ZKTecoService {
             resolve({ success: true, message: stdout.trim() });
           }
         } else {
-          console.error(`❌ ZKTeco ${scriptName} error:`, stderr);
-          resolve({
-            success: false,
-            error: stderr || `Process exited with code ${code}`,
-          });
+          const errorMessage =
+            stderr || stdout || `Process exited with code ${code}`;
+          console.error(`❌ ZKTeco ${scriptName} error:`, errorMessage);
+          resolve({ success: false, error: errorMessage });
         }
       });
 
@@ -115,15 +127,67 @@ export class ZKTecoService {
         console.error(`❌ ZKTeco ${scriptName} spawn error:`, error);
         resolve({ success: false, error: error.message });
       });
+
+      // Add timeout handling
+      setTimeout(() => {
+        if (!pythonProcess.killed) {
+          console.log(`⏰ Python process timeout, killing process`);
+          pythonProcess.kill("SIGTERM");
+          resolve({ success: false, error: "Process timeout" });
+        }
+      }, 30000); // 30 second timeout
     });
   }
 
-  public async testConnection(): Promise<ZKTecoResponse> {
+  public async testSimple(): Promise<ZKTecoResponse> {
     try {
+      console.log("🔄 Testing Python imports and ZK library...");
+      return await this.executePythonScript("test_simple");
+    } catch (error) {
+      console.error("❌ Simple test failed:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  public async testConnection(forceTest = false): Promise<ZKTecoResponse> {
+    try {
+      // Check if we recently tested and it was successful
+      if (
+        !forceTest &&
+        this.connectionStatus.connected &&
+        this.connectionStatus.lastChecked &&
+        Date.now() - this.connectionStatus.lastChecked.getTime() < 60000
+      ) {
+        // Less than 1 minute ago
+        console.log("🔄 Using cached ZKTeco connection status (connected)");
+        return {
+          success: true,
+          message: "Connection cached as successful",
+          data: { cached: true },
+        };
+      }
+
       console.log("🔄 Testing ZKTeco connection...");
-      return await this.executePythonScript("test_connection");
+      const result = await this.executePythonScript("test_connection");
+
+      // Update connection status
+      this.connectionStatus.connected = result.success;
+      this.connectionStatus.lastChecked = new Date();
+
+      if (result.success) {
+        console.log("✅ ZKTeco connection test successful");
+      } else {
+        console.log("❌ ZKTeco connection test failed");
+      }
+
+      return result;
     } catch (error) {
       console.error("❌ ZKTeco connection test failed:", error);
+      this.connectionStatus.connected = false;
+      this.connectionStatus.lastChecked = new Date();
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -141,6 +205,17 @@ export class ZKTecoService {
     try {
       console.log("🔄 Creating ZKTeco user:", userData);
 
+      // Test imports first
+      console.log("🔍 Testing Python imports before user creation...");
+      const importTest = await this.testSimple();
+      if (!importTest.success) {
+        console.error("❌ Python import test failed:", importTest.error);
+        return {
+          success: false,
+          error: `Python import failed: ${importTest.error}`,
+        };
+      }
+
       const args = [
         userData.uid.toString(),
         userData.name,
@@ -152,7 +227,37 @@ export class ZKTecoService {
         args.push(userData.password);
       }
 
-      return await this.executePythonScript("create_user", args);
+      const result = await this.executePythonScript("create_user", args);
+
+      if (result.success) {
+        const userInfo = result.data?.user || {};
+        const finalUid = userInfo.uid || userData.uid;
+        const uidChanged = userInfo.uid_changed || false;
+
+        console.log(
+          `✅ ZKTeco user created successfully: ${userData.name} (UID: ${finalUid})`
+        );
+
+        if (uidChanged) {
+          console.log(
+            `⚠️ UID changed from ${userData.uid} to ${finalUid} due to conflict`
+          );
+        }
+
+        // Return the actual UID that was used
+        return {
+          ...result,
+          data: {
+            ...result.data,
+            actualUid: finalUid,
+            uidChanged: uidChanged,
+          },
+        };
+      } else {
+        console.error(`❌ ZKTeco user creation failed: ${result.error}`);
+      }
+
+      return result;
     } catch (error) {
       console.error("❌ ZKTeco user creation failed:", error);
       return {
@@ -264,6 +369,13 @@ export class ZKTecoService {
       ip: this.deviceIp,
       port: this.devicePort,
       timeout: this.timeout,
+      connected: this.connectionStatus.connected,
+      lastChecked: this.connectionStatus.lastChecked,
     };
+  }
+
+  // Get connection status without testing
+  public getConnectionStatus() {
+    return this.connectionStatus;
   }
 }

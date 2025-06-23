@@ -269,7 +269,6 @@ export function useMqttAttendance() {
     async (messageStr: string) => {
       try {
         const payload: AttendancePayload = JSON.parse(messageStr);
-        console.log("📊 Attendance message received:", payload);
 
         // Show toast notification for check_in only
         if (payload.Status === "check_in" && typeof payload.Data !== "string") {
@@ -302,8 +301,6 @@ export function useMqttAttendance() {
                 },
               }),
             });
-
-            console.log("✅ Attendance history log created");
           } catch (error) {
             console.error("❌ Failed to create attendance history log:", error);
           }

@@ -3,12 +3,20 @@ import { spawn } from "child_process";
 
 export async function POST(request: NextRequest) {
   try {
+    // Build RTSP URL from environment variables
     const rtspUrl =
-      "rtsp://admin:gspe-intercon@192.168.0.64:554/Streaming/Channels/101";
+      process.env.RTSP_CAMERA_URL ||
+      `rtsp://${process.env.RTSP_CAMERA_USERNAME || "admin"}:${
+        process.env.RTSP_CAMERA_PASSWORD || "gspe-intercon"
+      }@${process.env.RTSP_CAMERA_IP || "192.168.0.64"}:${
+        process.env.RTSP_CAMERA_PORT || "554"
+      }/Streaming/Channels/${process.env.RTSP_CAMERA_CHANNEL || "101"}`;
+
+    console.log(
+      `🎥 Capturing frame from RTSP: ${rtspUrl.replace(/:[^:@]*@/, ":***@")}`
+    );
 
     return new Promise((resolve, reject) => {
-      console.log("Capturing frame from RTSP stream...");
-
       const ffmpeg = spawn("ffmpeg", [
         "-rtsp_transport",
         "tcp",
@@ -22,35 +30,44 @@ export async function POST(request: NextRequest) {
         "mjpeg",
         "-q:v",
         "2",
+        "-y", // Overwrite output
         "-",
       ]);
 
       let frameData = Buffer.alloc(0);
+      let errorOutput = "";
 
       ffmpeg.stdout.on("data", (chunk) => {
         frameData = Buffer.concat([frameData, chunk]);
       });
 
       ffmpeg.stderr.on("data", (data) => {
-        console.log(`FFmpeg capture stderr: ${data}`);
+        errorOutput += data.toString();
+        console.log(`📹 FFmpeg: ${data}`);
       });
 
       ffmpeg.on("error", (error) => {
-        console.error("FFmpeg capture error:", error);
-        reject(
+        console.error("❌ FFmpeg spawn error:", error);
+        resolve(
           NextResponse.json(
-            { error: "Failed to capture frame", details: error.message },
+            {
+              success: false,
+              error: "Failed to start FFmpeg",
+              details: error.message,
+            },
             { status: 500 }
           )
         );
       });
 
       ffmpeg.on("close", (code) => {
+        console.log(`🎬 FFmpeg process closed with code: ${code}`);
+
         if (code === 0 && frameData.length > 0) {
           // Convert to base64
           const base64Frame = frameData.toString("base64");
           console.log(
-            `Frame captured successfully, size: ${frameData.length} bytes`
+            `✅ Frame captured successfully, size: ${frameData.length} bytes`
           );
 
           resolve(
@@ -58,31 +75,58 @@ export async function POST(request: NextRequest) {
               success: true,
               image: base64Frame,
               size: frameData.length,
+              timestamp: new Date().toISOString(),
             })
           );
         } else {
-          console.error(`FFmpeg capture failed with code ${code}`);
-          reject(
+          console.error(`❌ FFmpeg failed with code ${code}`);
+          console.error(`📝 FFmpeg stderr: ${errorOutput}`);
+
+          resolve(
             NextResponse.json(
-              { error: "Failed to capture frame", code },
+              {
+                success: false,
+                error: "Failed to capture frame",
+                code,
+                details: errorOutput,
+                rtspUrl: rtspUrl.replace(/:[^:@]*@/, ":***@"), // Hide password in response
+              },
               { status: 500 }
             )
           );
         }
       });
 
-      // Set timeout for capture
+      // Increase timeout to 30 seconds for better reliability
       setTimeout(() => {
+        console.log("⏰ FFmpeg capture timeout, terminating process...");
         ffmpeg.kill("SIGTERM");
-        reject(
-          NextResponse.json({ error: "Frame capture timeout" }, { status: 408 })
+
+        setTimeout(() => {
+          if (!ffmpeg.killed) {
+            console.log("🔪 Force killing FFmpeg process...");
+            ffmpeg.kill("SIGKILL");
+          }
+        }, 2000);
+
+        resolve(
+          NextResponse.json(
+            {
+              success: false,
+              error: "Frame capture timeout",
+              timeout: 30000,
+              details: errorOutput,
+            },
+            { status: 408 }
+          )
         );
-      }, 10000); // 10 second timeout
+      }, 30000); // 30 second timeout
     });
   } catch (error) {
-    console.error("Capture frame error:", error);
+    console.error("❌ Capture frame error:", error);
     return NextResponse.json(
       {
+        success: false,
         error: "Failed to capture frame",
         details: error instanceof Error ? error.message : "Unknown error",
       },

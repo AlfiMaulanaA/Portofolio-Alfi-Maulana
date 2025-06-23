@@ -149,7 +149,7 @@ class DatabaseService {
       }
     }
 
-    // Create History Log table
+    // Create History Log table with proper foreign key handling
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS history_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -188,80 +188,8 @@ class DatabaseService {
       );
     }
 
-    // Insert admin user if not exists (NO SAMPLE USERS)
-    const adminExists = this.db
-      .prepare("SELECT id FROM users WHERE email = ?")
-      .get("admin@biometric.system");
-    if (!adminExists) {
-      // Check if columns exist before inserting
-      const hasFaceApiId = this.checkColumnExists("users", "face_api_id");
-      const hasZktecoUid = this.checkColumnExists("users", "zkteco_uid");
-
-      if (hasFaceApiId && hasZktecoUid) {
-        this.db
-          .prepare(
-            `
-          INSERT INTO users (name, email, department, status, card_registered, fingerprint_registered, palm_registered, face_registered, face_api_id, zkteco_uid, last_seen)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `
-          )
-          .run(
-            "System Administrator",
-            "admin@biometric.system",
-            "IT Administration",
-            "active",
-            1, // true as 1
-            1, // true as 1
-            1, // true as 1
-            1, // true as 1
-            null, // face_api_id
-            null, // zkteco_uid
-            new Date().toISOString()
-          );
-      } else if (hasFaceApiId) {
-        this.db
-          .prepare(
-            `
-          INSERT INTO users (name, email, department, status, card_registered, fingerprint_registered, palm_registered, face_registered, face_api_id, last_seen)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `
-          )
-          .run(
-            "System Administrator",
-            "admin@biometric.system",
-            "IT Administration",
-            "active",
-            1, // true as 1
-            1, // true as 1
-            1, // true as 1
-            1, // true as 1
-            null, // face_api_id
-            new Date().toISOString()
-          );
-      } else {
-        // Insert without additional columns
-        this.db
-          .prepare(
-            `
-          INSERT INTO users (name, email, department, status, card_registered, fingerprint_registered, palm_registered, face_registered, last_seen)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `
-          )
-          .run(
-            "System Administrator",
-            "admin@biometric.system",
-            "IT Administration",
-            "active",
-            1, // true as 1
-            1, // true as 1
-            1, // true as 1
-            1, // true as 1
-            new Date().toISOString()
-          );
-      }
-
-      console.log("✅ Admin user created");
-    }
+    // NO DEFAULT ADMIN USER - Clean database
+    console.log("✅ Database initialized with clean user table");
   }
 
   // Helper function to convert SQLite integers to booleans
@@ -409,7 +337,21 @@ class DatabaseService {
     registered: boolean
   ): User | null {
     const field = `${type}_registered`;
-    return this.updateUser(id, { [field]: registered });
+    console.log(`📝 Updating ${field} to ${registered} for user ID ${id}`);
+
+    const result = this.updateUser(id, { [field]: registered });
+
+    if (result) {
+      console.log(`✅ Database updated successfully:`, {
+        userId: result.id,
+        name: result.name,
+        [field]: result[field as keyof User],
+      });
+    } else {
+      console.error(`❌ Failed to update ${field} for user ID ${id}`);
+    }
+
+    return result;
   }
 
   public updateUserLastSeen(id: number): User | null {
@@ -432,7 +374,7 @@ class DatabaseService {
     return this.updateUser(id, { zkteco_uid: zktecoUid });
   }
 
-  // History Log operations
+  // History Log operations with better error handling
   public getAllHistoryLogs(limit?: number): HistoryLog[] {
     const query = limit
       ? "SELECT * FROM history_logs ORDER BY timestamp DESC LIMIT ?"
@@ -452,24 +394,51 @@ class DatabaseService {
   }
 
   public createHistoryLog(logData: CreateHistoryLogData): HistoryLog {
-    const stmt = this.db.prepare(`
-      INSERT INTO history_logs (user_id, user_name, recognition_type, result, confidence, location, device_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+    console.log("📝 Creating history log:", logData);
 
-    const result = stmt.run(
-      logData.user_id || null,
-      logData.user_name,
-      logData.recognition_type,
-      logData.result,
-      logData.confidence || 0,
-      logData.location || "Main Entrance",
-      logData.device_id || null
-    );
+    // Validate user_id if provided
+    if (logData.user_id) {
+      const userExists = this.getUserById(logData.user_id);
+      if (!userExists) {
+        console.warn(
+          `⚠️ User ID ${logData.user_id} not found, setting to null`
+        );
+        logData.user_id = null;
+      }
+    }
 
-    return this.db
-      .prepare("SELECT * FROM history_logs WHERE id = ?")
-      .get(result.lastInsertRowid) as HistoryLog;
+    try {
+      const stmt = this.db.prepare(`
+        INSERT INTO history_logs (user_id, user_name, recognition_type, result, confidence, location, device_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const result = stmt.run(
+        logData.user_id || null,
+        logData.user_name,
+        logData.recognition_type,
+        logData.result,
+        logData.confidence || 0,
+        logData.location || "Main Entrance",
+        logData.device_id || null
+      );
+
+      const newLog = this.db
+        .prepare("SELECT * FROM history_logs WHERE id = ?")
+        .get(result.lastInsertRowid) as HistoryLog;
+
+      console.log("✅ History log created successfully:", {
+        id: newLog.id,
+        user_name: newLog.user_name,
+        recognition_type: newLog.recognition_type,
+        result: newLog.result,
+      });
+
+      return newLog;
+    } catch (error) {
+      console.error("❌ Failed to create history log:", error);
+      throw error;
+    }
   }
 
   // Statistics - Fixed SQL queries

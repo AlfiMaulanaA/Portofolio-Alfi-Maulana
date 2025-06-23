@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 
+// Prevent static generation for this streaming route
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET(request: NextRequest) {
   try {
     // Build RTSP URL from environment variables
@@ -113,8 +117,6 @@ export async function GET(request: NextRequest) {
         ffmpeg.stderr.on("data", (data) => {
           const message = data.toString();
           if (message.includes("frame=") || message.includes("fps=")) {
-            // Log periodic stats
-            console.log(`📊 FFmpeg: ${message.trim()}`);
           } else if (message.includes("error") || message.includes("Error")) {
             console.error(`❌ FFmpeg Error: ${message}`);
           }
@@ -151,7 +153,6 @@ export async function GET(request: NextRequest) {
 
     return new NextResponse(stream, { headers });
   } catch (error) {
-    console.error("❌ MJPEG Stream setup error:", error);
     return NextResponse.json(
       {
         error: "Failed to start MJPEG stream",

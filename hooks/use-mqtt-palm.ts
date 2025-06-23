@@ -495,11 +495,9 @@ export function useMqttPalm() {
 
   // Auto-connect on mount
   useEffect(() => {
-    console.log("🚀 Initializing MQTT Palm connection...");
     connect();
 
     return () => {
-      console.log("🧹 Cleaning up MQTT Palm connection...");
       disconnect();
     };
   }, []); // Only run on mount
