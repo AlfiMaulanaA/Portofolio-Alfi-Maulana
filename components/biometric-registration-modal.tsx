@@ -10,15 +10,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { CreditCard, Fingerprint, CheckCircle } from "lucide-react";
 import { PalmRegistrationModal } from "./palm-registration-modal";
 import { FaceRegistrationModal } from "./face-registration-modal";
+import Swal from "sweetalert2";
+import withReactContent from "sweetalert2-react-content";
 
-// Update interface User untuk menggunakan number ID
+const MySwal = withReactContent(Swal);
+
 interface User {
-  id: number; // Pastikan ini number, bukan string
+  id: number;
   name: string;
   email: string;
+  zkteco_uid?: number | null;
 }
 
 interface BiometricRegistrationModalProps {
@@ -40,6 +46,8 @@ export function BiometricRegistrationModal({
   const [status, setStatus] = useState<
     "idle" | "scanning" | "processing" | "complete" | "error"
   >("idle");
+  const [cardNumber, setCardNumber] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   // Use specialized modals for palm and face
   if (type === "palm") {
@@ -89,44 +97,230 @@ export function BiometricRegistrationModal({
   const getInstructions = () => {
     switch (type) {
       case "card":
-        return "Please tap your card on the reader";
+        return "Enter card number and register to ZKTeco device";
       case "fingerprint":
-        return "Place your finger on the scanner";
+        return "Enroll fingerprint to ZKTeco device";
       default:
         return "Follow the instructions";
     }
   };
 
-  const startRegistration = () => {
+  const startCardRegistration = async () => {
+    if (!cardNumber || !/^\d{8,10}$/.test(cardNumber)) {
+      MySwal.fire({
+        title: "Invalid Card Number",
+        text: "Please enter a valid 8-10 digit card number",
+        icon: "error",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setStatus("processing");
+
+    try {
+      const response = await fetch("/api/zkteco/register-card", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user?.id,
+          cardNumber: cardNumber,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setStatus("complete");
+        MySwal.fire({
+          title: "Success!",
+          text: "Card registered successfully",
+          icon: "success",
+          timer: 2000,
+        });
+        setTimeout(() => {
+          onComplete();
+          handleClose();
+        }, 2000);
+      } else {
+        setStatus("error");
+        MySwal.fire({
+          title: "Registration Failed",
+          text: result.error || "Failed to register card",
+          icon: "error",
+        });
+      }
+    } catch (error) {
+      setStatus("error");
+      MySwal.fire({
+        title: "Error",
+        text: "Network error during card registration",
+        icon: "error",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startFingerprintRegistration = async () => {
+    setIsLoading(true);
     setStatus("scanning");
     setProgress(0);
 
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setStatus("processing");
-          setTimeout(() => {
-            setStatus("complete");
-            setTimeout(() => {
-              onComplete();
-              handleClose();
-            }, 1500);
-          }, 1000);
-          return 100;
-        }
-        return prev + Math.random() * 15;
+    try {
+      // Start fingerprint enrollment
+      const response = await fetch("/api/zkteco/enroll-fingerprint", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user?.id,
+          fingerIndex: 1,
+          mode: "register",
+        }),
       });
-    }, 200);
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Simulate progress
+        const interval = setInterval(() => {
+          setProgress((prev) => {
+            if (prev >= 90) {
+              clearInterval(interval);
+              return 90;
+            }
+            return prev + Math.random() * 10;
+          });
+        }, 500);
+
+        // Show instruction to user
+        MySwal.fire({
+          title: "Fingerprint Enrollment",
+          text: "Please place your finger on the ZKTeco device scanner and follow the device instructions",
+          icon: "info",
+          showConfirmButton: true,
+          confirmButtonText: "Complete Enrollment",
+          allowOutsideClick: false,
+        }).then(async (enrollResult) => {
+          if (enrollResult.isConfirmed) {
+            // Complete the enrollment
+            try {
+              const saveResponse = await fetch(
+                "/api/zkteco/enroll-fingerprint",
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    userId: user?.id,
+                    fingerIndex: 1,
+                    mode: "save",
+                  }),
+                }
+              );
+
+              const saveResult = await saveResponse.json();
+
+              if (saveResult.success) {
+                setProgress(100);
+                setStatus("complete");
+                MySwal.fire({
+                  title: "Success!",
+                  text: "Fingerprint enrolled successfully",
+                  icon: "success",
+                  timer: 2000,
+                });
+                setTimeout(() => {
+                  onComplete();
+                  handleClose();
+                }, 2000);
+              } else {
+                setStatus("error");
+                MySwal.fire({
+                  title: "Enrollment Failed",
+                  text: saveResult.error || "Failed to save fingerprint",
+                  icon: "error",
+                });
+              }
+            } catch (error) {
+              setStatus("error");
+              MySwal.fire({
+                title: "Error",
+                text: "Failed to complete fingerprint enrollment",
+                icon: "error",
+              });
+            }
+          }
+        });
+      } else {
+        setStatus("error");
+        MySwal.fire({
+          title: "Enrollment Failed",
+          text: result.error || "Failed to start fingerprint enrollment",
+          icon: "error",
+        });
+      }
+    } catch (error) {
+      setStatus("error");
+      MySwal.fire({
+        title: "Error",
+        text: "Network error during fingerprint enrollment",
+        icon: "error",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleClose = () => {
     setProgress(0);
     setStatus("idle");
+    setCardNumber("");
+    setIsLoading(false);
     onClose();
   };
 
   if (!user || !type) return null;
+
+  // Check if user has ZKTeco UID
+  if (!user.zkteco_uid && (type === "card" || type === "fingerprint")) {
+    return (
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {getIcon()}
+              {getTitle()}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-2">
+                Registration for:
+              </p>
+              <p className="font-medium">{user.name}</p>
+              <p className="text-sm text-muted-foreground">{user.email}</p>
+            </div>
+            <div className="text-center text-red-600">
+              <p className="font-medium">ZKTeco Registration Required</p>
+              <p className="text-sm">
+                This user is not registered in the ZKTeco system. Please contact
+                administrator.
+              </p>
+            </div>
+            <Button onClick={handleClose} className="w-full">
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -145,6 +339,11 @@ export function BiometricRegistrationModal({
             </p>
             <p className="font-medium">{user.name}</p>
             <p className="text-sm text-muted-foreground">{user.email}</p>
+            {user.zkteco_uid && (
+              <p className="text-xs text-muted-foreground">
+                ZKTeco UID: {user.zkteco_uid}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col items-center space-y-4">
@@ -156,8 +355,36 @@ export function BiometricRegistrationModal({
                 <p className="text-sm text-center text-muted-foreground">
                   {getInstructions()}
                 </p>
-                <Button onClick={startRegistration} className="w-full">
-                  Start Registration
+
+                {type === "card" && (
+                  <div className="w-full space-y-2">
+                    <Label htmlFor="cardNumber">
+                      Card Number (8-10 digits)
+                    </Label>
+                    <Input
+                      id="cardNumber"
+                      value={cardNumber}
+                      onChange={(e) => setCardNumber(e.target.value)}
+                      placeholder="Enter card number"
+                      pattern="\d{8,10}"
+                    />
+                  </div>
+                )}
+
+                <Button
+                  onClick={
+                    type === "card"
+                      ? startCardRegistration
+                      : startFingerprintRegistration
+                  }
+                  className="w-full"
+                  disabled={isLoading}
+                >
+                  {isLoading
+                    ? "Processing..."
+                    : `Start ${
+                        type === "card" ? "Card" : "Fingerprint"
+                      } Registration`}
                 </Button>
               </>
             )}
@@ -167,13 +394,15 @@ export function BiometricRegistrationModal({
                 <div className="w-32 h-32 rounded-lg border-2 border-primary flex items-center justify-center animate-pulse">
                   {getIcon()}
                 </div>
-                <div className="w-full space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Progress</span>
-                    <span>{Math.round(progress)}%</span>
+                {type === "fingerprint" && (
+                  <div className="w-full space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Progress</span>
+                      <span>{Math.round(progress)}%</span>
+                    </div>
+                    <Progress value={progress} className="w-full" />
                   </div>
-                  <Progress value={progress} className="w-full" />
-                </div>
+                )}
                 <Badge variant="secondary">
                   {status === "scanning" ? "Scanning..." : "Processing..."}
                 </Badge>
@@ -190,9 +419,27 @@ export function BiometricRegistrationModal({
                 </Badge>
               </>
             )}
+
+            {status === "error" && (
+              <>
+                <div className="w-32 h-32 rounded-lg border-2 border-red-500 flex items-center justify-center bg-red-50">
+                  <div className="h-8 w-8 text-red-500">❌</div>
+                </div>
+                <Badge variant="destructive">Registration Failed</Badge>
+                <Button
+                  onClick={() => setStatus("idle")}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Try Again
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+
+export default BiometricRegistrationModal;

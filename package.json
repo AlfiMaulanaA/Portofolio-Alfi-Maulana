@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "setup": "npm run setup:python && npm run setup:zkteco",
-    "setup:python": "pip install -r scripts/requirements.txt",
+    "setup:python": "pip3 install -r scripts/requirements.txt || pip install -r scripts/requirements.txt",
     "setup:zkteco": "node scripts/setup-zkteco.js"
   },
   "dependencies": {

@@ -60,6 +60,7 @@ export interface CreateHistoryLogData {
   confidence?: number;
   location?: string;
   device_id?: string;
+  additional_data?: any; // For storing extra information like attendance type, mode, etc.
 }
 
 class DatabaseService {
@@ -260,6 +261,28 @@ class DatabaseService {
     return (result.max_uid || 0) + 1;
   }
 
+  public getNextSequentialZktecoUid(): number {
+    if (!this.checkColumnExists("users", "zkteco_uid")) {
+      console.log("📝 zkteco_uid column doesn't exist, starting from UID 1");
+      return 1;
+    }
+
+    const result = this.db
+      .prepare(
+        "SELECT MAX(zkteco_uid) as max_uid FROM users WHERE zkteco_uid IS NOT NULL"
+      )
+      .get() as { max_uid: number | null };
+
+    const nextUid = (result.max_uid || 0) + 1;
+    console.log(
+      `📝 Next sequential ZKTeco UID from database: ${nextUid} (max existing: ${
+        result.max_uid || 0
+      })`
+    );
+
+    return nextUid;
+  }
+
   public createUser(userData: CreateUserData): User {
     const stmt = this.db.prepare(`
       INSERT INTO users (name, email, department, status)
@@ -371,7 +394,17 @@ class DatabaseService {
       console.warn("Cannot update zkteco_uid - column does not exist");
       return this.getUserById(id);
     }
-    return this.updateUser(id, { zkteco_uid: zktecoUid });
+
+    console.log(`📝 Updating ZKTeco UID to ${zktecoUid} for user ID ${id}`);
+    const result = this.updateUser(id, { zkteco_uid: zktecoUid });
+
+    if (result) {
+      console.log(
+        `✅ ZKTeco UID updated successfully: User ${result.name} (ID: ${id}) -> UID: ${zktecoUid}`
+      );
+    }
+
+    return result;
   }
 
   // History Log operations with better error handling
@@ -432,6 +465,7 @@ class DatabaseService {
         user_name: newLog.user_name,
         recognition_type: newLog.recognition_type,
         result: newLog.result,
+        device_id: newLog.device_id,
       });
 
       return newLog;

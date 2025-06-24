@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import DatabaseService from "@/lib/database";
 
+// Force dynamic rendering - prevent static generation
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 // GET /api/history/today - Get today's statistics
 export async function GET() {
   try {
     const db = DatabaseService.getInstance();
 
-    // Get today's date in YYYY-MM-DD format
-    const today = new Date().toISOString().split("T")[0];
+    // Get today's date in YYYY-MM-DD format (ensure timezone consistency)
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+
+    console.log(`📊 [/api/history/today] Fetching stats for date: ${today}`);
 
     // Get today's palm scans
     const todayPalmScans = db.db
@@ -60,27 +67,56 @@ export async function GET() {
       )
       .get(today) as { count: number };
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        palmScans: todayPalmScans.count,
-        successfulPalmScans: todaySuccessfulPalmScans.count,
-        faceScans: todayFaceScans.count,
-        successfulFaceScans: todaySuccessfulFaceScans.count,
-        totalScans: todayPalmScans.count + todayFaceScans.count,
-        totalSuccessful:
-          todaySuccessfulPalmScans.count + todaySuccessfulFaceScans.count,
+    const responseData = {
+      palmScans: todayPalmScans.count,
+      successfulPalmScans: todaySuccessfulPalmScans.count,
+      faceScans: todayFaceScans.count,
+      successfulFaceScans: todaySuccessfulFaceScans.count,
+      totalScans: todayPalmScans.count + todayFaceScans.count,
+      totalSuccessful:
+        todaySuccessfulPalmScans.count + todaySuccessfulFaceScans.count,
+      timestamp: now.toISOString(),
+      date: today,
+    };
+
+    console.log(`✅ [/api/history/today] Stats retrieved:`, responseData);
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: responseData,
       },
-    });
+      {
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+          "Surrogate-Control": "no-store",
+        },
+      }
+    );
   } catch (error) {
-    console.error("Error fetching today's stats:", error);
+    console.error(
+      "❌ [/api/history/today] Error fetching today's stats:",
+      error
+    );
     return NextResponse.json(
       {
         success: false,
         error: "Failed to fetch today's statistics",
         details: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date().toISOString(),
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
     );
   }
 }

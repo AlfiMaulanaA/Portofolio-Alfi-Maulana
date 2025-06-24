@@ -113,23 +113,56 @@ export async function POST(request: NextRequest) {
     // Register user to ZKTeco device
     try {
       const zktecoService = ZKTecoService.getInstance();
-      zktecoUid = db.getNextZktecoUid();
 
-      const zktecoResult = await zktecoService.createUser({
-        uid: zktecoUid,
-        name: name,
-        userId: newUser.id.toString(),
-        privilege: 0, // Regular user
+      // Get next UID from ZKTeco device
+      console.log(`🔄 Getting next UID from ZKTeco device...`);
+      const lastUidResult = await zktecoService.getLastUid();
+
+      let nextUid: number;
+      if (
+        lastUidResult.success &&
+        lastUidResult.data &&
+        typeof lastUidResult.data.next_uid === "number"
+      ) {
+        nextUid = lastUidResult.data.next_uid;
+        console.log(`📋 Using next UID from ZKTeco device: ${nextUid}`);
+      } else {
+        // Fallback to database sequential UID
+        nextUid = db.getNextSequentialZktecoUid();
+        console.log(`📋 Fallback to database sequential UID: ${nextUid}`);
+        console.log(
+          `⚠️ ZKTeco UID fetch failed: ${
+            lastUidResult.error || "Unknown error"
+          }`
+        );
+      }
+
+      // Ensure nextUid is a valid number
+      if (!nextUid || isNaN(nextUid)) {
+        nextUid = db.getNextSequentialZktecoUid();
+        console.log(`📋 Using fallback sequential UID: ${nextUid}`);
+      }
+
+      console.log(`🔄 Adding user to ZKTeco with UID: ${nextUid}`);
+
+      const zktecoResult = await zktecoService.addUser({
+        uid: nextUid,
+        username: name,
+        password: "", // No password by default
       });
 
       if (zktecoResult.success) {
-        db.updateUserZktecoUid(newUser.id, zktecoUid);
+        // Update database with the UID used
+        db.updateUserZktecoUid(newUser.id, nextUid);
+        zktecoUid = nextUid;
         integrationResults.zkteco.success = true;
+
         console.log(
-          `✅ User ${newUser.id} registered to ZKTeco with UID: ${zktecoUid}`
+          `✅ User ${newUser.id} registered to ZKTeco with UID: ${nextUid}`
         );
       } else {
         integrationResults.zkteco.error = zktecoResult.error || "Unknown error";
+        console.error(`❌ ZKTeco registration failed: ${zktecoResult.error}`);
       }
     } catch (zktecoError) {
       console.error("⚠️ ZKTeco registration failed:", zktecoError);

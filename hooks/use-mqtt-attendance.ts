@@ -148,7 +148,9 @@ export function useMqttAttendance() {
           JSON.stringify(payload),
           { qos: 1 }
         );
-
+        console.log(
+          `✅ Published attendance for User ${userId} (Type: ${type})`
+        );
         return true;
       } catch (error) {
         console.error("❌ Failed to publish attendance:", error);
@@ -181,6 +183,8 @@ export function useMqttAttendance() {
       const protocol = config.ssl ? "wss" : "ws";
       const brokerUrl = `${protocol}://${config.brokerAddress}:${config.port}`;
 
+      console.log(`🔌 Connecting to Attendance MQTT broker: ${brokerUrl}`);
+
       const client = mqtt.connect(brokerUrl, {
         username: config.username,
         password: config.password,
@@ -192,6 +196,8 @@ export function useMqttAttendance() {
       });
 
       client.on("connect", () => {
+        console.log("✅ MQTT Connected for attendance system");
+
         // Subscribe to attendance topic
         client.subscribe("acs_front_attendance", { qos: 1 }, (err) => {
           if (err) {
@@ -206,6 +212,7 @@ export function useMqttAttendance() {
               isConnecting: false,
             }));
           } else {
+            console.log("📡 Subscribed to acs_front_attendance topic");
             setState((prev) => ({
               ...prev,
               isConnected: true,
@@ -228,6 +235,7 @@ export function useMqttAttendance() {
       });
 
       client.on("close", () => {
+        console.log("🔌 Attendance MQTT Connection closed");
         setState((prev) => ({
           ...prev,
           isConnected: false,
@@ -236,6 +244,7 @@ export function useMqttAttendance() {
 
         // Auto-reconnect
         if (clientRef.current && !clientRef.current.disconnecting) {
+          console.log("🔄 Attempting to reconnect attendance in 5 seconds...");
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
           }, 5000);
@@ -269,19 +278,40 @@ export function useMqttAttendance() {
     async (messageStr: string) => {
       try {
         const payload: AttendancePayload = JSON.parse(messageStr);
+        console.log("📊 Attendance message received:", payload);
 
         // Show toast notification for check_in only
         if (payload.Status === "check_in" && typeof payload.Data !== "string") {
           showAttendanceNotification(payload);
 
-          // Create history log in database
+          // Create history log in database for ALL attendance types
           try {
             const data = payload.Data as AttendanceData;
             const attendanceType = getAttendanceType(data.type);
             const timestamp =
               data.timestamp || data["timestamp "] || new Date().toISOString();
 
-            await fetch("/api/history", {
+            // Map attendance type to recognition type
+            let recognitionType: "palm" | "face" | "fingerprint" | "card";
+            switch (data.type) {
+              case 1:
+                recognitionType = "fingerprint";
+                break;
+              case 2:
+                recognitionType = "palm";
+                break;
+              case 4:
+                recognitionType = "card";
+                break;
+              case 5:
+                recognitionType = "face";
+                break;
+              default:
+                recognitionType = "card"; // Default fallback
+            }
+
+            // Create history log
+            const historyResponse = await fetch("/api/history", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -289,18 +319,27 @@ export function useMqttAttendance() {
               body: JSON.stringify({
                 user_id: data.UID,
                 user_name: `User ${data.UID}`,
-                recognition_type: "attendance",
+                recognition_type: recognitionType,
                 result: "success",
                 confidence: 100,
-                location: "Front Door",
-                device_id: "acs_front_001",
+                location: "Access Control",
+                device_id: "zkteco_001",
                 additional_data: {
                   method: attendanceType.name,
                   mode: payload.Mode,
                   timestamp: timestamp,
+                  attendance_type: data.type,
                 },
               }),
             });
+
+            if (historyResponse.ok) {
+              console.log(
+                `✅ Attendance history log created for ${attendanceType.name}`
+              );
+            } else {
+              console.error("❌ Failed to create attendance history log");
+            }
           } catch (error) {
             console.error("❌ Failed to create attendance history log:", error);
           }
@@ -331,13 +370,17 @@ export function useMqttAttendance() {
       error: null,
       connectionAttempts: 0,
     }));
+
+    console.log("🔌 Disconnected from Attendance MQTT broker");
   }, []);
 
   // Auto-connect on mount
   useEffect(() => {
+    console.log("🚀 Initializing Attendance MQTT connection...");
     connect();
 
     return () => {
+      console.log("🧹 Cleaning up Attendance MQTT connection...");
       disconnect();
     };
   }, []);

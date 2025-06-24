@@ -1,45 +1,70 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import sys
 import json
+import os
 from zk import ZK
 
-def test_connection(ip, port, password="0", timeout=5):
+# Set UTF-8 encoding for Windows
+if os.name == 'nt':  # Windows
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+
+def test_connection(ip, port, password, timeout):
     try:
-        # Create ZK instance with environment-based configuration
-        zk = ZK(ip, port=int(port), timeout=int(timeout), password=int(password), force_udp=False, ommit_ping=False)
+        print(f"[INFO] Testing connection to ZKTeco device: {ip}:{port}")
+        print(f"[INFO] Device password: {password}, Timeout: {timeout}s")
+        
+        # Create ZK instance
+        device_password = int(password) if password != 'None' and password.isdigit() else 0
+        zk = ZK(ip, port=int(port), timeout=int(timeout), password=device_password)
+        
+        print(f"[INFO] ZK instance created successfully")
         
         # Connect to device
         conn = zk.connect()
+        print(f"[SUCCESS] Connected to ZKTeco device successfully")
         
         # Get device info
-        firmware_version = conn.get_firmware_version()
-        serialnumber = conn.get_serialnumber()
-        platform = conn.get_platform()
-        device_name = conn.get_device_name()
+        try:
+            firmware_version = conn.get_firmware_version()
+            print(f"[INFO] Firmware version: {firmware_version}")
+        except Exception as e:
+            print(f"[WARNING] Could not get firmware version: {str(e)}")
+            firmware_version = "Unknown"
         
         # Get user count
-        users = conn.get_users()
-        user_count = len(users)
+        try:
+            users = conn.get_users()
+            user_count = len(users)
+            print(f"[INFO] Total users on device: {user_count}")
+        except Exception as e:
+            print(f"[WARNING] Could not get user count: {str(e)}")
+            user_count = 0
         
-        # Get attendance count
-        attendances = conn.get_attendance()
-        attendance_count = len(attendances)
+        # Get device time
+        try:
+            device_time = conn.get_time()
+            print(f"[INFO] Device time: {device_time}")
+        except Exception as e:
+            print(f"[WARNING] Could not get device time: {str(e)}")
+            device_time = "Unknown"
         
         # Disconnect
         conn.disconnect()
+        print(f"[SUCCESS] Connection closed successfully")
         
         result = {
             "success": True,
+            "message": "Connection test successful",
             "device_info": {
                 "ip": ip,
                 "port": int(port),
-                "firmware": firmware_version,
-                "serial": serialnumber,
-                "platform": platform,
-                "name": device_name,
-                "users": user_count,
-                "attendances": attendance_count,
-                "timeout": int(timeout)
+                "firmware_version": firmware_version,
+                "user_count": user_count,
+                "device_time": str(device_time),
+                "connection_time": timeout
             }
         }
         
@@ -47,27 +72,30 @@ def test_connection(ip, port, password="0", timeout=5):
         return True
         
     except Exception as e:
+        print(f"[ERROR] Connection test failed: {str(e)}")
         error_result = {
             "success": False,
             "error": str(e),
-            "device": f"{ip}:{port}",
-            "config": {
-                "timeout": int(timeout),
-                "password": "***"
+            "error_type": type(e).__name__,
+            "device_info": {
+                "ip": ip,
+                "port": int(port),
+                "attempted_password": password,
+                "timeout": int(timeout)
             }
         }
         print(json.dumps(error_result))
         return False
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print(json.dumps({"success": False, "error": "Usage: python test_connection.py <ip> <port> [password] [timeout]"}))
+    if len(sys.argv) < 5:
+        print(json.dumps({"success": False, "error": "Usage: python test_connection.py <ip> <port> <password> <timeout>"}))
         sys.exit(1)
     
     ip = sys.argv[1]
     port = sys.argv[2]
-    password = sys.argv[3] if len(sys.argv) > 3 else "0"
-    timeout = sys.argv[4] if len(sys.argv) > 4 else "5"
+    password = sys.argv[3]
+    timeout = sys.argv[4]
     
     success = test_connection(ip, port, password, timeout)
     sys.exit(0 if success else 1)

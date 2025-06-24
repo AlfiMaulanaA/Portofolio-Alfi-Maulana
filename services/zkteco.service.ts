@@ -61,6 +61,17 @@ export class ZKTecoService {
   ): Promise<ZKTecoResponse> {
     return new Promise((resolve) => {
       const scriptPath = path.join(this.pythonScriptPath, `${scriptName}.py`);
+
+      // Check if script exists
+      if (!fs.existsSync(scriptPath)) {
+        console.error(`❌ Python script not found: ${scriptPath}`);
+        resolve({
+          success: false,
+          error: `Python script not found: ${scriptName}.py. Please ensure the script exists in ${this.pythonScriptPath}`,
+        });
+        return;
+      }
+
       const pythonArgs = [
         scriptPath,
         this.deviceIp,
@@ -71,85 +82,101 @@ export class ZKTecoService {
       ];
 
       console.log(`🔄 Executing ZKTeco script: ${scriptName}`);
-      console.log(`📝 Python command: python ${pythonArgs.join(" ")}`);
+      console.log(`📋 Script path: ${scriptPath}`);
+      console.log(`📋 Python args: python ${pythonArgs.join(" ")}`);
 
-      const pythonProcess = spawn("python", pythonArgs);
+      const pythonProcess = spawn("python3", pythonArgs);
       let stdout = "";
       let stderr = "";
 
       pythonProcess.stdout.on("data", (data) => {
         const output = data.toString();
         stdout += output;
-        // Log real-time output for debugging
-        console.log(`📤 Python stdout: ${output.trim()}`);
+        console.log(`📤 [${scriptName}] STDOUT:`, output.trim());
       });
 
       pythonProcess.stderr.on("data", (data) => {
         const error = data.toString();
         stderr += error;
-        // Log real-time errors for debugging
-        console.error(`📥 Python stderr: ${error.trim()}`);
+        console.error(`📤 [${scriptName}] STDERR:`, error.trim());
       });
 
       pythonProcess.on("close", (code) => {
-        console.log(`🔚 Python process closed with code: ${code}`);
-        console.log(`📝 Full stdout: ${stdout}`);
-        if (stderr) {
-          console.error(`📝 Full stderr: ${stderr}`);
-        }
+        console.log(`📋 [${scriptName}] Process exited with code: ${code}`);
+        console.log(`📋 [${scriptName}] Full STDOUT:`, stdout.trim());
+        console.log(`📋 [${scriptName}] Full STDERR:`, stderr.trim());
 
         if (code === 0) {
           try {
             // Try to parse the last line as JSON (the result)
             const lines = stdout.trim().split("\n");
             const lastLine = lines[lines.length - 1];
-            console.log(`🔍 Parsing last line: ${lastLine}`);
 
-            const result = JSON.parse(lastLine);
-            console.log(`✅ ZKTeco ${scriptName} success:`, result);
-            resolve({ success: true, data: result });
+            if (lastLine && lastLine.startsWith("{")) {
+              const result = JSON.parse(lastLine);
+              console.log(`✅ ZKTeco ${scriptName} success:`, result);
+              resolve({ success: true, data: result });
+            } else {
+              console.log(
+                `✅ ZKTeco ${scriptName} success (no JSON):`,
+                stdout.trim()
+              );
+              resolve({ success: true, message: stdout.trim() });
+            }
           } catch (error) {
             console.log(
-              `✅ ZKTeco ${scriptName} success (no JSON):`,
+              `✅ ZKTeco ${scriptName} success (parse error):`,
               stdout.trim()
             );
             resolve({ success: true, message: stdout.trim() });
           }
         } else {
           const errorMessage =
-            stderr || stdout || `Process exited with code ${code}`;
+            stderr.trim() || `Process exited with code ${code}`;
           console.error(`❌ ZKTeco ${scriptName} error:`, errorMessage);
-          resolve({ success: false, error: errorMessage });
+
+          // Try to parse error as JSON for more details
+          try {
+            const lines = stderr.trim().split("\n");
+            const lastLine = lines[lines.length - 1];
+            if (lastLine && lastLine.startsWith("{")) {
+              const errorResult = JSON.parse(lastLine);
+              resolve({
+                success: false,
+                error: errorResult.error || errorMessage,
+                data: errorResult,
+              });
+            } else {
+              resolve({ success: false, error: errorMessage });
+            }
+          } catch (parseError) {
+            resolve({ success: false, error: errorMessage });
+          }
         }
       });
 
       pythonProcess.on("error", (error) => {
         console.error(`❌ ZKTeco ${scriptName} spawn error:`, error);
-        resolve({ success: false, error: error.message });
+        resolve({
+          success: false,
+          error: `Failed to execute Python script: ${error.message}. Please ensure Python is installed and accessible.`,
+        });
       });
 
-      // Add timeout handling
+      // Add timeout for the process
       setTimeout(() => {
         if (!pythonProcess.killed) {
-          console.log(`⏰ Python process timeout, killing process`);
-          pythonProcess.kill("SIGTERM");
-          resolve({ success: false, error: "Process timeout" });
+          console.error(
+            `⏰ ZKTeco ${scriptName} timeout after ${this.timeout * 2} seconds`
+          );
+          pythonProcess.kill();
+          resolve({
+            success: false,
+            error: `Script execution timeout after ${this.timeout * 2} seconds`,
+          });
         }
-      }, 30000); // 30 second timeout
+      }, this.timeout * 2000); // Double the device timeout for script execution
     });
-  }
-
-  public async testSimple(): Promise<ZKTecoResponse> {
-    try {
-      console.log("🔄 Testing Python imports and ZK library...");
-      return await this.executePythonScript("test_simple");
-    } catch (error) {
-      console.error("❌ Simple test failed:", error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
   }
 
   public async testConnection(forceTest = false): Promise<ZKTecoResponse> {
@@ -171,6 +198,10 @@ export class ZKTecoService {
       }
 
       console.log("🔄 Testing ZKTeco connection...");
+      console.log(
+        `📋 Device: ${this.deviceIp}:${this.devicePort}, Password: ${this.devicePassword}, Timeout: ${this.timeout}s`
+      );
+
       const result = await this.executePythonScript("test_connection");
 
       // Update connection status
@@ -180,7 +211,7 @@ export class ZKTecoService {
       if (result.success) {
         console.log("✅ ZKTeco connection test successful");
       } else {
-        console.log("❌ ZKTeco connection test failed");
+        console.log("❌ ZKTeco connection test failed:", result.error);
       }
 
       return result;
@@ -205,14 +236,13 @@ export class ZKTecoService {
     try {
       console.log("🔄 Creating ZKTeco user:", userData);
 
-      // Test imports first
-      console.log("🔍 Testing Python imports before user creation...");
-      const importTest = await this.testSimple();
-      if (!importTest.success) {
-        console.error("❌ Python import test failed:", importTest.error);
+      // Test connection first
+      const connectionTest = await this.testConnection();
+      if (!connectionTest.success) {
+        console.error("❌ ZKTeco connection failed, cannot create user");
         return {
           success: false,
-          error: `Python import failed: ${importTest.error}`,
+          error: `Cannot connect to ZKTeco device: ${connectionTest.error}`,
         };
       }
 
@@ -226,6 +256,8 @@ export class ZKTecoService {
       if (userData.password) {
         args.push(userData.password);
       }
+
+      console.log(`📋 Creating user with args: [${args.join(", ")}]`);
 
       const result = await this.executePythonScript("create_user", args);
 
@@ -270,6 +302,17 @@ export class ZKTecoService {
   public async deleteUser(uid: number): Promise<ZKTecoResponse> {
     try {
       console.log("🔄 Deleting ZKTeco user:", uid);
+
+      // Test connection first
+      const connectionTest = await this.testConnection();
+      if (!connectionTest.success) {
+        console.error("❌ ZKTeco connection failed, cannot delete user");
+        return {
+          success: false,
+          error: `Cannot connect to ZKTeco device: ${connectionTest.error}`,
+        };
+      }
+
       return await this.executePythonScript("delete_user", [uid.toString()]);
     } catch (error) {
       console.error("❌ ZKTeco user deletion failed:", error);
@@ -301,14 +344,42 @@ export class ZKTecoService {
 
   public async enrollFingerprint(
     uid: number,
-    fingerId = 0
+    fingerIndex = 1,
+    mode = "register"
   ): Promise<ZKTecoResponse> {
     try {
-      console.log("🔄 Enrolling ZKTeco fingerprint:", uid, fingerId);
-      return await this.executePythonScript("enroll_fingerprint", [
-        uid.toString(),
-        fingerId.toString(),
-      ]);
+      console.log(
+        "🔄 Enrolling fingerprint to ZKTeco:",
+        uid,
+        fingerIndex,
+        mode
+      );
+
+      // Test connection first
+      const connectionTest = await this.testConnection();
+      if (!connectionTest.success) {
+        console.error("❌ ZKTeco connection failed, cannot enroll fingerprint");
+        return {
+          success: false,
+          error: `Cannot connect to ZKTeco device: ${connectionTest.error}`,
+        };
+      }
+
+      const args = [uid.toString(), fingerIndex.toString(), mode];
+
+      const result = await this.executePythonScript("enroll_finger", args);
+
+      if (result.success) {
+        console.log(
+          `✅ ZKTeco fingerprint enrollment successful: UID ${uid}, Finger ${fingerIndex}`
+        );
+      } else {
+        console.error(
+          `❌ ZKTeco fingerprint enrollment failed: ${result.error}`
+        );
+      }
+
+      return result;
     } catch (error) {
       console.error("❌ ZKTeco fingerprint enrollment failed:", error);
       return {
@@ -318,18 +389,38 @@ export class ZKTecoService {
     }
   }
 
-  public async setUserCard(
+  public async registerCard(
     uid: number,
     cardNumber: string
   ): Promise<ZKTecoResponse> {
     try {
-      console.log("🔄 Setting ZKTeco user card:", uid, cardNumber);
-      return await this.executePythonScript("set_card", [
-        uid.toString(),
-        cardNumber,
-      ]);
+      console.log("🔄 Registering card to ZKTeco:", uid, cardNumber);
+
+      // Test connection first
+      const connectionTest = await this.testConnection();
+      if (!connectionTest.success) {
+        console.error("❌ ZKTeco connection failed, cannot register card");
+        return {
+          success: false,
+          error: `Cannot connect to ZKTeco device: ${connectionTest.error}`,
+        };
+      }
+
+      const args = [uid.toString(), cardNumber];
+
+      const result = await this.executePythonScript("register_card", args);
+
+      if (result.success) {
+        console.log(
+          `✅ ZKTeco card registration successful: UID ${uid}, Card ${cardNumber}`
+        );
+      } else {
+        console.error(`❌ ZKTeco card registration failed: ${result.error}`);
+      }
+
+      return result;
     } catch (error) {
-      console.error("❌ ZKTeco card setting failed:", error);
+      console.error("❌ ZKTeco card registration failed:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
@@ -356,6 +447,177 @@ export class ZKTecoService {
       return await this.executePythonScript("clear_data");
     } catch (error) {
       console.error("❌ ZKTeco clear data failed:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  public async addUser(userData: {
+    uid: number;
+    username: string;
+    password?: string;
+  }): Promise<ZKTecoResponse> {
+    try {
+      console.log("🔄 Adding user to ZKTeco:", userData);
+
+      // Test connection first
+      const connectionTest = await this.testConnection();
+      if (!connectionTest.success) {
+        console.error("❌ ZKTeco connection failed, cannot add user");
+        return {
+          success: false,
+          error: `Cannot connect to ZKTeco device: ${connectionTest.error}`,
+        };
+      }
+
+      const args = [
+        userData.uid.toString(),
+        userData.username,
+        userData.password || "",
+      ];
+
+      console.log(`📋 Adding user with args: [${args.join(", ")}]`);
+
+      const result = await this.executePythonScript("add_user", args);
+
+      if (result.success) {
+        console.log(
+          `✅ ZKTeco user added successfully: ${userData.username} (UID: ${userData.uid})`
+        );
+      } else {
+        console.error(`❌ ZKTeco user addition failed: ${result.error}`);
+      }
+
+      return result;
+    } catch (error) {
+      console.error("❌ ZKTeco user addition failed:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  public async getLastUid(): Promise<ZKTecoResponse> {
+    try {
+      console.log("🔄 Getting last UID from ZKTeco...");
+
+      // Test connection first
+      const connectionTest = await this.testConnection();
+      if (!connectionTest.success) {
+        console.error("❌ ZKTeco connection failed, cannot get last UID");
+        return {
+          success: false,
+          error: `Cannot connect to ZKTeco device: ${connectionTest.error}`,
+        };
+      }
+
+      const result = await this.executePythonScript("get_last_uid");
+
+      if (result.success) {
+        console.log(
+          `✅ ZKTeco last UID retrieved: ${result.data?.last_uid}, next: ${result.data?.next_uid}`
+        );
+      } else {
+        console.error(`❌ ZKTeco get last UID failed: ${result.error}`);
+      }
+
+      return result;
+    } catch (error) {
+      console.error("❌ ZKTeco get last UID failed:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  // Diagnostic method to check system requirements
+  public async diagnoseSystem(): Promise<ZKTecoResponse> {
+    try {
+      console.log("🔍 Running ZKTeco system diagnostics...");
+
+      const diagnostics = {
+        pythonAvailable: false,
+        scriptsExist: false,
+        deviceReachable: false,
+        dependenciesInstalled: false,
+        errors: [] as string[],
+        details: {} as any,
+      };
+
+      // Check if Python is available
+      try {
+        const pythonCheck = spawn("python3", ["--version"]);
+        await new Promise((resolve) => {
+          pythonCheck.on("close", (code) => {
+            diagnostics.pythonAvailable = code === 0;
+            if (code !== 0) {
+              diagnostics.errors.push("Python is not available or not in PATH");
+            }
+            resolve(code);
+          });
+        });
+      } catch (error) {
+        diagnostics.errors.push("Failed to check Python availability");
+      }
+
+      // Check if scripts exist
+      const requiredScripts = [
+        "test_connection.py",
+        "create_user.py",
+        "delete_user.py",
+      ];
+      const missingScripts = [];
+
+      for (const script of requiredScripts) {
+        const scriptPath = path.join(this.pythonScriptPath, script);
+        if (!fs.existsSync(scriptPath)) {
+          missingScripts.push(script);
+        }
+      }
+
+      diagnostics.scriptsExist = missingScripts.length === 0;
+      if (missingScripts.length > 0) {
+        diagnostics.errors.push(
+          `Missing scripts: ${missingScripts.join(", ")}`
+        );
+      }
+
+      // Test device connection
+      const connectionResult = await this.testConnection(true);
+      diagnostics.deviceReachable = connectionResult.success;
+      if (!connectionResult.success) {
+        diagnostics.errors.push(
+          `Device connection failed: ${connectionResult.error}`
+        );
+      }
+
+      diagnostics.details = {
+        deviceIp: this.deviceIp,
+        devicePort: this.devicePort,
+        timeout: this.timeout,
+        scriptsPath: this.pythonScriptPath,
+        missingScripts,
+        connectionResult,
+      };
+
+      const overallSuccess =
+        diagnostics.pythonAvailable &&
+        diagnostics.scriptsExist &&
+        diagnostics.deviceReachable;
+
+      return {
+        success: overallSuccess,
+        data: diagnostics,
+        message: overallSuccess
+          ? "All diagnostics passed"
+          : "Some diagnostics failed",
+      };
+    } catch (error) {
+      console.error("❌ System diagnostics failed:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",

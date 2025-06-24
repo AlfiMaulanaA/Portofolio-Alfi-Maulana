@@ -147,13 +147,14 @@ export async function DELETE(
       );
     }
 
-    // Prevent deletion of admin user
-    if (existingUser.email === "admin@biometric.system") {
-      return NextResponse.json(
-        { success: false, error: "Cannot delete system administrator" },
-        { status: 403 }
-      );
-    }
+    console.log(
+      `🔄 Starting deletion process for user: ${existingUser.name} (ID: ${userId})`
+    );
+    console.log(`📋 User details:`, {
+      face_api_id: existingUser.face_api_id,
+      zkteco_uid: existingUser.zkteco_uid,
+      email: existingUser.email,
+    });
 
     const deletionResults = {
       faceApi: { success: false, error: null as string | null },
@@ -164,6 +165,9 @@ export async function DELETE(
     // Delete from Face API if user has face_api_id
     if (existingUser.face_api_id) {
       try {
+        console.log(
+          `🔄 Deleting user from Face API with ID: ${existingUser.face_api_id}`
+        );
         const faceApiService = FaceApiService.getInstance();
         await faceApiService.deletePersonnel(existingUser.face_api_id);
         deletionResults.faceApi.success = true;
@@ -179,11 +183,15 @@ export async function DELETE(
       }
     } else {
       deletionResults.faceApi.success = true; // No Face API ID to delete
+      console.log(`ℹ️ User has no Face API ID, skipping Face API deletion`);
     }
 
     // Delete from ZKTeco device if user has zkteco_uid
     if (existingUser.zkteco_uid) {
       try {
+        console.log(
+          `🔄 Deleting user from ZKTeco device with UID: ${existingUser.zkteco_uid}`
+        );
         const zktecoService = ZKTecoService.getInstance();
         const zktecoResult = await zktecoService.deleteUser(
           existingUser.zkteco_uid
@@ -191,10 +199,11 @@ export async function DELETE(
         if (zktecoResult.success) {
           deletionResults.zkteco.success = true;
           console.log(
-            `✅ User deleted from ZKTeco: ${existingUser.zkteco_uid}`
+            `✅ User deleted from ZKTeco device: UID ${existingUser.zkteco_uid}`
           );
         } else {
           deletionResults.zkteco.error = zktecoResult.error || "Unknown error";
+          console.error(`❌ ZKTeco deletion failed: ${zktecoResult.error}`);
         }
       } catch (zktecoError) {
         console.error("⚠️ ZKTeco deletion failed:", zktecoError);
@@ -203,27 +212,38 @@ export async function DELETE(
       }
     } else {
       deletionResults.zkteco.success = true; // No ZKTeco UID to delete
+      console.log(`ℹ️ User has no ZKTeco UID, skipping ZKTeco deletion`);
     }
 
     // Delete from local database
+    console.log(`🔄 Deleting user from local database: ${userId}`);
     const deleted = db.deleteUser(userId);
     if (deleted) {
       deletionResults.local.success = true;
+      console.log(`✅ User deleted from local database: ${userId}`);
     } else {
       deletionResults.local.error = "Failed to delete from local database";
+      console.error(`❌ Failed to delete user from local database: ${userId}`);
     }
 
     if (deletionResults.local.success) {
+      console.log(
+        `🎉 User deletion completed successfully for: ${existingUser.name}`
+      );
       return NextResponse.json({
         success: true,
         message: "User deletion completed",
         results: deletionResults,
         details: {
           faceApi: deletionResults.faceApi.success
-            ? "Deleted from Face API"
+            ? existingUser.face_api_id
+              ? "Deleted from Face API"
+              : "No Face API ID to delete"
             : `Face API error: ${deletionResults.faceApi.error}`,
           zkteco: deletionResults.zkteco.success
-            ? "Deleted from ZKTeco"
+            ? existingUser.zkteco_uid
+              ? "Deleted from ZKTeco device"
+              : "No ZKTeco UID to delete"
             : `ZKTeco error: ${deletionResults.zkteco.error}`,
           local: "Deleted from local database",
         },
