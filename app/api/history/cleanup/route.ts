@@ -11,8 +11,6 @@ export async function POST() {
     twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
     const cutoffDate = twoDaysAgo.toISOString();
 
-    console.log(`🧹 Cleaning up history logs older than: ${cutoffDate}`);
-
     // Delete logs older than 2 days
     const result = db.db
       .prepare(

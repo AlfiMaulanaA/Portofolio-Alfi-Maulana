@@ -1,5 +1,5 @@
 "use client";
-
+import { useEffect } from "react";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users,
   Plus,
@@ -35,10 +36,10 @@ import {
   Shield,
 } from "lucide-react";
 import { BiometricRegistrationModal } from "@/components/biometric-registration-modal";
+import { PalmVeinUsersTable } from "@/components/palm-vein-users-table";
 import { PasswordProtection } from "@/components/password-protection";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
-import { useEffect } from "react"; // sudah ada? skip aja
 
 const MySwal = withReactContent(Swal);
 
@@ -96,11 +97,7 @@ export default function UserManagement() {
     department: "",
     status: "active",
   });
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchUsers();
-    }
-  }, [isAuthenticated]);
+
   // Handle password authentication
   const handlePasswordSuccess = () => {
     setIsAuthenticated(true);
@@ -120,6 +117,11 @@ export default function UserManagement() {
     });
   };
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUsers();
+    }
+  }, [isAuthenticated]);
   const handlePasswordCancel = () => {
     // Redirect back to dashboard
     window.location.href = "/";
@@ -621,144 +623,170 @@ export default function UserManagement() {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>User Directory</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2">Name</th>
-                    <th className="text-left p-2">Email</th>
-                    <th className="text-left p-2">Department</th>
-                    <th className="text-left p-2">Status</th>
-                    <th className="text-left p-2">Registrations</th>
-                    <th className="text-left p-2">Last Seen</th>
-                    <th className="text-left p-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <tr key={user.id} className="border-b hover:bg-muted/50">
-                      <td className="p-2 font-medium">{user.name}</td>
-                      <td className="p-2 text-muted-foreground">
-                        {user.email}
-                      </td>
-                      <td className="p-2">{user.department}</td>
-                      <td className="p-2">
-                        <Badge
-                          variant={
-                            user.status === "active" ? "default" : "secondary"
-                          }
+        <Tabs defaultValue="local-users" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="local-users">Local Users</TabsTrigger>
+            <TabsTrigger value="palm-vein-users">Palm Vein Users</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="local-users" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Local User Directory</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Name</th>
+                        <th className="text-left p-2">Email</th>
+                        <th className="text-left p-2">Department</th>
+                        <th className="text-left p-2">Status</th>
+                        <th className="text-left p-2">Registrations</th>
+                        <th className="text-left p-2">Last Seen</th>
+                        <th className="text-left p-2">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user) => (
+                        <tr
+                          key={user.id}
+                          className="border-b hover:bg-muted/50"
                         >
-                          {user.status}
-                        </Badge>
-                      </td>
-                      <td className="p-2">
-                        <div className="flex gap-1">
-                          <Badge
-                            variant={
-                              user.card_registered ? "default" : "outline"
-                            }
-                            className="text-xs"
-                          >
-                            Card
-                          </Badge>
-                          <Badge
-                            variant={
-                              user.fingerprint_registered
-                                ? "default"
-                                : "outline"
-                            }
-                            className="text-xs"
-                          >
-                            Finger
-                          </Badge>
-                          <Badge
-                            variant={
-                              user.palm_registered ? "default" : "outline"
-                            }
-                            className="text-xs"
-                          >
-                            Palm
-                          </Badge>
-                          <Badge
-                            variant={
-                              user.face_registered ? "default" : "outline"
-                            }
-                            className="text-xs"
-                          >
-                            Face
-                          </Badge>
-                        </div>
-                      </td>
-                      <td className="p-2 text-sm text-muted-foreground">
-                        {user.last_seen
-                          ? new Date(user.last_seen).toLocaleString()
-                          : "Never"}
-                      </td>
-                      <td className="p-2">
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRegistration(user.id, "card")}
-                            disabled={user.card_registered}
-                          >
-                            <CreditCard className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              handleRegistration(user.id, "fingerprint")
-                            }
-                            disabled={user.fingerprint_registered}
-                          >
-                            <Fingerprint className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRegistration(user.id, "palm")}
-                            disabled={user.palm_registered}
-                          >
-                            <Hand className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRegistration(user.id, "face")}
-                            disabled={user.face_registered}
-                          >
-                            <Camera className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleEditUser(user)}
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => deleteUser(user.id, user.name)}
-                            disabled={user.email === "admin@biometric.system"}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                          <td className="p-2 font-medium">{user.name}</td>
+                          <td className="p-2 text-muted-foreground">
+                            {user.email}
+                          </td>
+                          <td className="p-2">{user.department}</td>
+                          <td className="p-2">
+                            <Badge
+                              variant={
+                                user.status === "active"
+                                  ? "default"
+                                  : "secondary"
+                              }
+                            >
+                              {user.status}
+                            </Badge>
+                          </td>
+                          <td className="p-2">
+                            <div className="flex gap-1">
+                              <Badge
+                                variant={
+                                  user.card_registered ? "default" : "outline"
+                                }
+                                className="text-xs"
+                              >
+                                Card
+                              </Badge>
+                              <Badge
+                                variant={
+                                  user.fingerprint_registered
+                                    ? "default"
+                                    : "outline"
+                                }
+                                className="text-xs"
+                              >
+                                Finger
+                              </Badge>
+                              <Badge
+                                variant={
+                                  user.palm_registered ? "default" : "outline"
+                                }
+                                className="text-xs"
+                              >
+                                Palm
+                              </Badge>
+                              <Badge
+                                variant={
+                                  user.face_registered ? "default" : "outline"
+                                }
+                                className="text-xs"
+                              >
+                                Face
+                              </Badge>
+                            </div>
+                          </td>
+                          <td className="p-2 text-sm text-muted-foreground">
+                            {user.last_seen
+                              ? new Date(user.last_seen).toLocaleString()
+                              : "Never"}
+                          </td>
+                          <td className="p-2">
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleRegistration(user.id, "card")
+                                }
+                                disabled={user.card_registered}
+                              >
+                                <CreditCard className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleRegistration(user.id, "fingerprint")
+                                }
+                                disabled={user.fingerprint_registered}
+                              >
+                                <Fingerprint className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleRegistration(user.id, "palm")
+                                }
+                                disabled={user.palm_registered}
+                              >
+                                <Hand className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleRegistration(user.id, "face")
+                                }
+                                disabled={user.face_registered}
+                              >
+                                <Camera className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditUser(user)}
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => deleteUser(user.id, user.name)}
+                                disabled={
+                                  user.email === "admin@biometric.system"
+                                }
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="palm-vein-users" className="space-y-4">
+            <PalmVeinUsersTable />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Edit User Dialog */}

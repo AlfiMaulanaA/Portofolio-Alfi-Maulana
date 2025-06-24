@@ -14,8 +14,6 @@ export async function GET() {
     const now = new Date();
     const today = now.toISOString().split("T")[0];
 
-    console.log(`📊 [/api/history/today] Fetching stats for date: ${today}`);
-
     // Get today's palm scans
     const todayPalmScans = db.db
       .prepare(
@@ -78,8 +76,6 @@ export async function GET() {
       timestamp: now.toISOString(),
       date: today,
     };
-
-    console.log(`✅ [/api/history/today] Stats retrieved:`, responseData);
 
     return NextResponse.json(
       {

@@ -111,7 +111,7 @@ export function useMqttAttendance() {
   // Get MQTT configuration
   const getMqttConfig = useCallback((): MqttConfig => {
     return {
-      brokerAddress: "192.168.1.86",
+      brokerAddress: "192.168.1.86", // Updated broker address
       port: Number.parseInt(process.env.NEXT_PUBLIC_MQTT_BROKER_PORT || "1883"),
       username: process.env.NEXT_PUBLIC_MQTT_USERNAME || "",
       password: process.env.NEXT_PUBLIC_MQTT_PASSWORD || "",
@@ -324,6 +324,7 @@ export function useMqttAttendance() {
             });
 
             if (historyResponse.ok) {
+              console.log(`✅ Attendance history log created for`);
             } else {
               console.error("❌ Failed to create attendance history log");
             }

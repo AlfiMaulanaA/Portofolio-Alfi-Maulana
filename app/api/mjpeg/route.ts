@@ -33,6 +33,9 @@ export async function GET(request: NextRequest) {
     // Create a readable stream
     const stream = new ReadableStream({
       start(controller) {
+        let isControllerClosed = false;
+        let ffmpegProcess: any = null;
+
         const ffmpeg = spawn("ffmpeg", [
           "-rtsp_transport",
           "tcp",
@@ -58,16 +61,34 @@ export async function GET(request: NextRequest) {
           "-",
         ]);
 
+        ffmpegProcess = ffmpeg;
+
         let frameBuffer = Buffer.alloc(0);
         let frameCount = 0;
 
+        // Helper function to safely enqueue data
+        const safeEnqueue = (data: any) => {
+          if (!isControllerClosed) {
+            try {
+              controller.enqueue(data);
+              return true;
+            } catch (error) {
+              isControllerClosed = true;
+              return false;
+            }
+          }
+          return false;
+        };
+
         ffmpeg.stdout.on("data", (chunk) => {
+          if (isControllerClosed) return;
+
           frameBuffer = Buffer.concat([frameBuffer, chunk]);
 
           // Look for JPEG markers (FFD8 = start, FFD9 = end)
           let startIndex = 0;
 
-          while (startIndex < frameBuffer.length - 1) {
+          while (startIndex < frameBuffer.length - 1 && !isControllerClosed) {
             // Find JPEG start marker (0xFFD8)
             const jpegStart = frameBuffer.indexOf(
               Buffer.from([0xff, 0xd8]),
@@ -86,24 +107,18 @@ export async function GET(request: NextRequest) {
             const frameData = frameBuffer.slice(jpegStart, jpegEnd + 2);
             frameCount++;
 
-            try {
-              // Send frame as multipart response
-              const boundary = `--frame\r\n`;
-              const contentType = `Content-Type: image/jpeg\r\n`;
-              const contentLength = `Content-Length: ${frameData.length}\r\n\r\n`;
-              const endBoundary = `\r\n`;
+            // Send frame as multipart response
+            const boundary = `--frame\r\n`;
+            const contentType = `Content-Type: image/jpeg\r\n`;
+            const contentLength = `Content-Length: ${frameData.length}\r\n\r\n`;
+            const endBoundary = `\r\n`;
 
-              controller.enqueue(new TextEncoder().encode(boundary));
-              controller.enqueue(new TextEncoder().encode(contentType));
-              controller.enqueue(new TextEncoder().encode(contentLength));
-              controller.enqueue(frameData);
-              controller.enqueue(new TextEncoder().encode(endBoundary));
-
-              if (frameCount % 30 === 0) {
-              }
-            } catch (error) {
-              console.error("❌ Error sending frame:", error);
-            }
+            // Safely enqueue all frame parts
+            if (!safeEnqueue(new TextEncoder().encode(boundary))) break;
+            if (!safeEnqueue(new TextEncoder().encode(contentType))) break;
+            if (!safeEnqueue(new TextEncoder().encode(contentLength))) break;
+            if (!safeEnqueue(frameData)) break;
+            if (!safeEnqueue(new TextEncoder().encode(endBoundary))) break;
 
             startIndex = jpegEnd + 2;
           }
@@ -124,34 +139,49 @@ export async function GET(request: NextRequest) {
 
         ffmpeg.on("error", (error) => {
           console.error("❌ FFmpeg process error:", error);
-          controller.error(error);
+          if (!isControllerClosed) {
+            controller.error(error);
+            isControllerClosed = true;
+          }
         });
 
         ffmpeg.on("close", (code) => {
-          if (code !== 0) {
-            controller.error(
-              new Error(`FFmpeg process exited with code ${code}`)
-            );
-          } else {
-            controller.close();
+          if (!isControllerClosed) {
+            if (code !== 0) {
+              controller.error(
+                new Error(`FFmpeg process exited with code ${code}`)
+              );
+            } else {
+              controller.close();
+            }
+            isControllerClosed = true;
           }
         });
 
         // Handle client disconnect
         request.signal.addEventListener("abort", () => {
-          ffmpeg.kill("SIGTERM");
-          setTimeout(() => {
-            if (!ffmpeg.killed) {
-              ffmpeg.kill("SIGKILL");
-            }
-          }, 5000);
-          controller.close();
+          isControllerClosed = true;
+
+          if (ffmpegProcess && !ffmpegProcess.killed) {
+            ffmpegProcess.kill("SIGTERM");
+            setTimeout(() => {
+              if (ffmpegProcess && !ffmpegProcess.killed) {
+                ffmpegProcess.kill("SIGKILL");
+              }
+            }, 3000);
+          }
+
+          if (!isControllerClosed) {
+            controller.close();
+            isControllerClosed = true;
+          }
         });
       },
     });
 
     return new NextResponse(stream, { headers });
   } catch (error) {
+    console.error("❌ MJPEG Stream setup error:", error);
     return NextResponse.json(
       {
         error: "Failed to start MJPEG stream",

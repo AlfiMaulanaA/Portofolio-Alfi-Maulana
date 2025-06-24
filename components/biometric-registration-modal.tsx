@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,17 +8,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { CreditCard, Fingerprint, CheckCircle } from "lucide-react";
+import {
+  CreditCard,
+  Fingerprint,
+  CheckCircle,
+  Loader2,
+  Hand,
+} from "lucide-react";
 import { PalmRegistrationModal } from "./palm-registration-modal";
 import { FaceRegistrationModal } from "./face-registration-modal";
+import { useMqttZKTecoCommand } from "@/hooks/use-mqtt-zkteco-command";
 import Swal from "sweetalert2";
-import withReactContent from "sweetalert2-react-content";
-
-const MySwal = withReactContent(Swal);
 
 interface User {
   id: number;
@@ -35,6 +44,20 @@ interface BiometricRegistrationModalProps {
   type: "card" | "fingerprint" | "palm" | "face" | null;
 }
 
+// Finger mapping for better UX
+const FINGER_OPTIONS = [
+  { value: 1, label: "Right Thumb", hand: "right", finger: "thumb" },
+  { value: 2, label: "Right Index", hand: "right", finger: "index" },
+  { value: 3, label: "Right Middle", hand: "right", finger: "middle" },
+  { value: 4, label: "Right Ring", hand: "right", finger: "ring" },
+  { value: 5, label: "Right Pinky", hand: "right", finger: "pinky" },
+  { value: 6, label: "Left Thumb", hand: "left", finger: "thumb" },
+  { value: 7, label: "Left Index", hand: "left", finger: "index" },
+  { value: 8, label: "Left Middle", hand: "left", finger: "middle" },
+  { value: 9, label: "Left Ring", hand: "left", finger: "ring" },
+  { value: 10, label: "Left Pinky", hand: "left", finger: "pinky" },
+];
+
 export function BiometricRegistrationModal({
   isOpen,
   onClose,
@@ -42,12 +65,38 @@ export function BiometricRegistrationModal({
   user,
   type,
 }: BiometricRegistrationModalProps) {
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState<
-    "idle" | "scanning" | "processing" | "complete" | "error"
-  >("idle");
-  const [cardNumber, setCardNumber] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedFinger, setSelectedFinger] = useState<number>(1); // Default to right thumb
+  const [registrationStep, setRegistrationStep] = useState<
+    "select" | "processing" | "complete"
+  >("select");
+  const { state, registerFingerprint, registerCard } = useMqttZKTecoCommand();
+
+  // Reset state when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      setRegistrationStep("select");
+      setSelectedFinger(1);
+      setIsProcessing(false);
+    }
+  }, [isOpen]);
+
+  // Listen for successful registration
+  useEffect(() => {
+    if (state.lastResponse && state.lastResponse.Status === "success") {
+      if (
+        (type === "fingerprint" && state.lastResponse.Mode === "register_fp") ||
+        (type === "card" && state.lastResponse.Mode === "register_card")
+      ) {
+        setIsProcessing(false);
+        setRegistrationStep("complete");
+        setTimeout(() => {
+          onComplete();
+          handleClose();
+        }, 3000);
+      }
+    }
+  }, [state.lastResponse, type, onComplete]);
 
   // Use specialized modals for palm and face
   if (type === "palm") {
@@ -95,200 +144,145 @@ export function BiometricRegistrationModal({
   };
 
   const getInstructions = () => {
-    switch (type) {
-      case "card":
-        return "Enter card number and register to ZKTeco device";
-      case "fingerprint":
-        return "Enroll fingerprint to ZKTeco device";
-      default:
-        return "Follow the instructions";
+    if (registrationStep === "select") {
+      switch (type) {
+        case "card":
+          return "Click register and then tap your card on the ZKTeco device";
+        case "fingerprint":
+          return "Select which finger to register, then click start registration";
+        default:
+          return "Follow the instructions";
+      }
+    } else if (registrationStep === "processing") {
+      switch (type) {
+        case "card":
+          return "Tap your card on the ZKTeco device now";
+        case "fingerprint":
+          const selectedFingerInfo = FINGER_OPTIONS.find(
+            (f) => f.value === selectedFinger
+          );
+          return `Place your ${selectedFingerInfo?.label.toLowerCase()} on the ZKTeco device scanner`;
+        default:
+          return "Follow device instructions";
+      }
+    } else {
+      return "Registration completed successfully!";
     }
   };
 
-  const startCardRegistration = async () => {
-    if (!cardNumber || !/^\d{8,10}$/.test(cardNumber)) {
-      MySwal.fire({
-        title: "Invalid Card Number",
-        text: "Please enter a valid 8-10 digit card number",
+  const handleRegistration = async () => {
+    if (!user?.zkteco_uid) {
+      Swal.fire({
+        title: "Error",
+        text: "User is not registered in ZKTeco system",
         icon: "error",
       });
       return;
     }
 
-    setIsLoading(true);
-    setStatus("processing");
-
-    try {
-      const response = await fetch("/api/zkteco/register-card", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: user?.id,
-          cardNumber: cardNumber,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        setStatus("complete");
-        MySwal.fire({
-          title: "Success!",
-          text: "Card registered successfully",
-          icon: "success",
-          timer: 2000,
-        });
-        setTimeout(() => {
-          onComplete();
-          handleClose();
-        }, 2000);
-      } else {
-        setStatus("error");
-        MySwal.fire({
-          title: "Registration Failed",
-          text: result.error || "Failed to register card",
-          icon: "error",
-        });
-      }
-    } catch (error) {
-      setStatus("error");
-      MySwal.fire({
-        title: "Error",
-        text: "Network error during card registration",
+    if (!state.isConnected) {
+      Swal.fire({
+        title: "Connection Error",
+        text: "MQTT connection is not available. Please check connection.",
         icon: "error",
       });
-    } finally {
-      setIsLoading(false);
+      return;
     }
-  };
 
-  const startFingerprintRegistration = async () => {
-    setIsLoading(true);
-    setStatus("scanning");
-    setProgress(0);
+    setIsProcessing(true);
+    setRegistrationStep("processing");
 
     try {
-      // Start fingerprint enrollment
-      const response = await fetch("/api/zkteco/enroll-fingerprint", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: user?.id,
-          fingerIndex: 1,
-          mode: "register",
-        }),
-      });
+      let success = false;
 
-      const result = await response.json();
+      if (type === "fingerprint") {
+        success = registerFingerprint(user.zkteco_uid, selectedFinger);
 
-      if (result.success) {
-        // Simulate progress
-        const interval = setInterval(() => {
-          setProgress((prev) => {
-            if (prev >= 90) {
-              clearInterval(interval);
-              return 90;
-            }
-            return prev + Math.random() * 10;
-          });
-        }, 500);
-
-        // Show instruction to user
-        MySwal.fire({
-          title: "Fingerprint Enrollment",
-          text: "Please place your finger on the ZKTeco device scanner and follow the device instructions",
+        // Show finger-specific instruction
+        const selectedFingerInfo = FINGER_OPTIONS.find(
+          (f) => f.value === selectedFinger
+        );
+        Swal.fire({
+          title: "Fingerprint Registration Started",
+          html: `
+            <div class="text-center">
+              <div class="mb-4">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-2">
+                  <svg class="w-8 h-8 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M6.625 2.655A9 9 0 0119 11a1 1 0 11-2 0 7 7 0 00-10.377-6.61 1 1 0 11-1.998-.735zM4.662 4.959A1 1 0 014.75 6.37 6 6 0 006 17.97a1 1 0 11-1.993-.24A8 8 0 013.318 5.74a1 1 0 011.344-.781zM10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm0 10a1 1 0 011 1v4a1 1 0 11-2 0v-4a1 1 0 011-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              <p><strong>Finger:</strong> ${selectedFingerInfo?.label}</p>
+              <p class="text-sm text-gray-600 mt-2">Please place your <strong>${selectedFingerInfo?.label.toLowerCase()}</strong> on the ZKTeco device scanner and follow the device instructions.</p>
+            </div>
+          `,
           icon: "info",
-          showConfirmButton: true,
-          confirmButtonText: "Complete Enrollment",
-          allowOutsideClick: false,
-        }).then(async (enrollResult) => {
-          if (enrollResult.isConfirmed) {
-            // Complete the enrollment
-            try {
-              const saveResponse = await fetch(
-                "/api/zkteco/enroll-fingerprint",
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    userId: user?.id,
-                    fingerIndex: 1,
-                    mode: "save",
-                  }),
-                }
-              );
-
-              const saveResult = await saveResponse.json();
-
-              if (saveResult.success) {
-                setProgress(100);
-                setStatus("complete");
-                MySwal.fire({
-                  title: "Success!",
-                  text: "Fingerprint enrolled successfully",
-                  icon: "success",
-                  timer: 2000,
-                });
-                setTimeout(() => {
-                  onComplete();
-                  handleClose();
-                }, 2000);
-              } else {
-                setStatus("error");
-                MySwal.fire({
-                  title: "Enrollment Failed",
-                  text: saveResult.error || "Failed to save fingerprint",
-                  icon: "error",
-                });
-              }
-            } catch (error) {
-              setStatus("error");
-              MySwal.fire({
-                title: "Error",
-                text: "Failed to complete fingerprint enrollment",
-                icon: "error",
-              });
-            }
-          }
+          timer: 5000,
+          showConfirmButton: false,
         });
+      } else if (type === "card") {
+        success = registerCard(user.zkteco_uid);
+
+        Swal.fire({
+          title: "Card Registration Started",
+          text: "Please tap your card on the ZKTeco device now.",
+          icon: "info",
+          timer: 3000,
+          showConfirmButton: false,
+        });
+      }
+
+      if (success) {
+        // Set timeout to reset processing state if no response
+        setTimeout(() => {
+          if (registrationStep === "processing") {
+            setIsProcessing(false);
+            setRegistrationStep("select");
+            Swal.fire({
+              title: "Registration Timeout",
+              text: "No response from device. Please try again.",
+              icon: "warning",
+            });
+          }
+        }, 30000); // 30 seconds timeout
       } else {
-        setStatus("error");
-        MySwal.fire({
-          title: "Enrollment Failed",
-          text: result.error || "Failed to start fingerprint enrollment",
+        setIsProcessing(false);
+        setRegistrationStep("select");
+        Swal.fire({
+          title: "Command Failed",
+          text: "Failed to send registration command to device.",
           icon: "error",
         });
       }
     } catch (error) {
-      setStatus("error");
-      MySwal.fire({
+      setIsProcessing(false);
+      setRegistrationStep("select");
+      console.error("Registration error:", error);
+      Swal.fire({
         title: "Error",
-        text: "Network error during fingerprint enrollment",
+        text: "An error occurred during registration.",
         icon: "error",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleClose = () => {
-    setProgress(0);
-    setStatus("idle");
-    setCardNumber("");
-    setIsLoading(false);
+    setIsProcessing(false);
+    setRegistrationStep("select");
+    setSelectedFinger(1);
     onClose();
+  };
+
+  const handleBack = () => {
+    setIsProcessing(false);
+    setRegistrationStep("select");
   };
 
   if (!user || !type) return null;
 
   // Check if user has ZKTeco UID
-  if (!user.zkteco_uid && (type === "card" || type === "fingerprint")) {
+  if (!user.zkteco_uid) {
     return (
       <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-md">
@@ -339,102 +333,142 @@ export function BiometricRegistrationModal({
             </p>
             <p className="font-medium">{user.name}</p>
             <p className="text-sm text-muted-foreground">{user.email}</p>
-            {user.zkteco_uid && (
-              <p className="text-xs text-muted-foreground">
-                ZKTeco UID: {user.zkteco_uid}
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">
+              ZKTeco UID: {user.zkteco_uid}
+            </p>
           </div>
 
           <div className="flex flex-col items-center space-y-4">
-            {status === "idle" && (
-              <>
-                <div className="w-32 h-32 rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center">
-                  {getIcon()}
-                </div>
-                <p className="text-sm text-center text-muted-foreground">
-                  {getInstructions()}
-                </p>
+            {/* Visual Indicator */}
+            <div className="w-32 h-32 rounded-lg border-2 border-dashed border-muted-foreground/25 flex items-center justify-center">
+              {registrationStep === "processing" ? (
+                <Loader2 className="h-8 w-8 animate-spin" />
+              ) : registrationStep === "complete" ? (
+                <CheckCircle className="h-8 w-8 text-green-500" />
+              ) : (
+                getIcon()
+              )}
+            </div>
 
-                {type === "card" && (
-                  <div className="w-full space-y-2">
-                    <Label htmlFor="cardNumber">
-                      Card Number (8-10 digits)
-                    </Label>
-                    <Input
-                      id="cardNumber"
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(e.target.value)}
-                      placeholder="Enter card number"
-                      pattern="\d{8,10}"
-                    />
-                  </div>
-                )}
-
-                <Button
-                  onClick={
-                    type === "card"
-                      ? startCardRegistration
-                      : startFingerprintRegistration
+            {/* Finger Selection for Fingerprint */}
+            {type === "fingerprint" && registrationStep === "select" && (
+              <div className="w-full space-y-2">
+                <Label htmlFor="finger-select">Select Finger</Label>
+                <Select
+                  value={selectedFinger.toString()}
+                  onValueChange={(value) =>
+                    setSelectedFinger(Number.parseInt(value))
                   }
-                  className="w-full"
-                  disabled={isLoading}
                 >
-                  {isLoading
-                    ? "Processing..."
-                    : `Start ${
-                        type === "card" ? "Card" : "Fingerprint"
-                      } Registration`}
-                </Button>
-              </>
+                  <SelectTrigger id="finger-select">
+                    <SelectValue placeholder="Choose finger to register" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FINGER_OPTIONS.map((finger) => (
+                      <SelectItem
+                        key={finger.value}
+                        value={finger.value.toString()}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Hand
+                            className={`h-4 w-4 ${
+                              finger.hand === "left" ? "scale-x-[-1]" : ""
+                            }`}
+                          />
+                          {finger.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
 
-            {(status === "scanning" || status === "processing") && (
-              <>
-                <div className="w-32 h-32 rounded-lg border-2 border-primary flex items-center justify-center animate-pulse">
-                  {getIcon()}
-                </div>
-                {type === "fingerprint" && (
-                  <div className="w-full space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Progress</span>
-                      <span>{Math.round(progress)}%</span>
-                    </div>
-                    <Progress value={progress} className="w-full" />
-                  </div>
-                )}
-                <Badge variant="secondary">
-                  {status === "scanning" ? "Scanning..." : "Processing..."}
+            {/* Selected Finger Display during Processing */}
+            {type === "fingerprint" && registrationStep === "processing" && (
+              <div className="text-center">
+                <Badge variant="secondary" className="mb-2">
+                  {
+                    FINGER_OPTIONS.find((f) => f.value === selectedFinger)
+                      ?.label
+                  }
                 </Badge>
-              </>
+              </div>
             )}
 
-            {status === "complete" && (
-              <>
-                <div className="w-32 h-32 rounded-lg border-2 border-green-500 flex items-center justify-center bg-green-50">
-                  <CheckCircle className="h-8 w-8 text-green-500" />
-                </div>
-                <Badge variant="default" className="bg-green-500">
-                  Registration Complete!
-                </Badge>
-              </>
+            <p className="text-sm text-center text-muted-foreground">
+              {getInstructions()}
+            </p>
+
+            {/* Connection Status */}
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  state.isConnected ? "bg-green-500" : "bg-red-500"
+                }`}
+              />
+              <span className="text-xs text-muted-foreground">
+                MQTT {state.isConnected ? "Connected" : "Disconnected"}
+              </span>
+            </div>
+
+            {/* Current Status */}
+            {state.currentStatus && registrationStep === "processing" && (
+              <Badge variant="secondary" className="text-xs">
+                {state.currentStatus}
+              </Badge>
             )}
 
-            {status === "error" && (
-              <>
-                <div className="w-32 h-32 rounded-lg border-2 border-red-500 flex items-center justify-center bg-red-50">
-                  <div className="h-8 w-8 text-red-500">❌</div>
-                </div>
-                <Badge variant="destructive">Registration Failed</Badge>
+            {/* Action Buttons */}
+            <div className="w-full space-y-2">
+              {registrationStep === "select" && (
                 <Button
-                  onClick={() => setStatus("idle")}
-                  variant="outline"
+                  onClick={handleRegistration}
                   className="w-full"
+                  disabled={isProcessing || !state.isConnected}
                 >
-                  Try Again
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    `Start ${
+                      type === "card" ? "Card" : "Fingerprint"
+                    } Registration`
+                  )}
                 </Button>
-              </>
-            )}
+              )}
+
+              {registrationStep === "processing" && (
+                <>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Follow the instructions on the ZKTeco device to complete
+                      registration.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleBack}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Cancel Registration
+                  </Button>
+                </>
+              )}
+
+              {registrationStep === "complete" && (
+                <div className="text-center">
+                  <Badge variant="default" className="bg-green-500 mb-2">
+                    Registration Complete!
+                  </Badge>
+                  <p className="text-xs text-muted-foreground">
+                    Modal will close automatically...
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </DialogContent>
