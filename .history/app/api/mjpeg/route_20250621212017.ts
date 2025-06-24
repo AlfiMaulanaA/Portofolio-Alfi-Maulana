@@ -128,6 +128,7 @@ export async function GET(request: NextRequest) {
         });
 
         ffmpeg.on("close", (code) => {
+          console.log(`🔚 FFmpeg process closed with code ${code}`);
           if (code !== 0) {
             controller.error(
               new Error(`FFmpeg process exited with code ${code}`)

@@ -15,6 +15,9 @@ export async function POST(
     const { id } = params;
     const body: SavePalmRequest = await request.json();
 
+    console.log("Save palm request received for user ID:", id);
+    console.log("Request body:", body);
+
     // Validate required fields
     if (!id) {
       return NextResponse.json(
@@ -74,6 +77,10 @@ export async function POST(
       location: "Registration Terminal",
       device_id: body.deviceId || "palm_scanner_001",
     });
+
+    console.log("Palm data saved successfully for user:", id);
+    console.log("Updated user:", updatedUser);
+    console.log("History log created:", historyLog);
 
     return NextResponse.json({
       success: true,

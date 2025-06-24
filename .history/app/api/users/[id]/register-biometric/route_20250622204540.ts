@@ -42,12 +42,27 @@ export async function POST(
       );
     }
 
+    console.log(`🔄 Starting ${type} registration for user:`, {
+      userId: existingUser.id,
+      name: existingUser.name,
+      email: existingUser.email,
+    });
+
     // Handle face registration (no ZKTeco integration needed)
     if (type === "face") {
+      console.log("📸 Processing face registration - updating database...");
+
       // Update face registration in database
       const updatedUser = db.updateUserRegistration(userId, "face", true);
 
       if (updatedUser) {
+        console.log("✅ Face registration successful:", {
+          userId: updatedUser.id,
+          name: updatedUser.name,
+          face_registered: updatedUser.face_registered,
+          face_api_id: updatedUser.face_api_id,
+        });
+
         return NextResponse.json({
           success: true,
           message: "Face registration completed successfully",
@@ -78,6 +93,8 @@ export async function POST(
     const zktecoService = ZKTecoService.getInstance();
     let zktecoResult: any = { success: false };
 
+    console.log(`🔧 Processing ${type} registration with ZKTeco device...`);
+
     // Handle different biometric types
     switch (type) {
       case "card":
@@ -87,7 +104,7 @@ export async function POST(
             { status: 400 }
           );
         }
-
+        console.log("💳 Registering card number:", data.cardNumber);
         zktecoResult = await zktecoService.setUserCard(
           existingUser.zkteco_uid,
           data.cardNumber
@@ -96,7 +113,7 @@ export async function POST(
 
       case "fingerprint":
         const fingerId = data?.fingerId || 0;
-
+        console.log("🔍 Enrolling fingerprint, finger ID:", fingerId);
         zktecoResult = await zktecoService.enrollFingerprint(
           existingUser.zkteco_uid,
           fingerId
@@ -110,13 +127,15 @@ export async function POST(
             { status: 400 }
           );
         }
-
+        console.log("🔐 Setting user password");
         zktecoResult = await zktecoService.setUserPassword(
           existingUser.zkteco_uid,
           data.password
         );
         break;
     }
+
+    console.log(`🔧 ZKTeco ${type} registration result:`, zktecoResult);
 
     // Update local database if ZKTeco registration was successful
     if (zktecoResult.success) {
@@ -127,6 +146,14 @@ export async function POST(
       );
 
       if (updatedUser) {
+        console.log(`✅ ${type} registration successful:`, {
+          userId: updatedUser.id,
+          name: updatedUser.name,
+          [`${type}_registered`]:
+            updatedUser[`${type}_registered` as keyof typeof updatedUser],
+          zkteco_uid: updatedUser.zkteco_uid,
+        });
+
         return NextResponse.json({
           success: true,
           message: `${

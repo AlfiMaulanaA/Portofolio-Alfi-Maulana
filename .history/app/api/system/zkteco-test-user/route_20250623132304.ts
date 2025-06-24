@@ -4,6 +4,8 @@ import path from "path";
 
 export async function GET() {
   try {
+    console.log("🔍 Testing ZKTeco User object creation...");
+
     const scriptPath = path.join(
       process.cwd(),
       "scripts",
@@ -32,6 +34,8 @@ export async function GET() {
           stderr: stderr,
           timestamp: new Date().toISOString(),
         };
+
+        console.log("🔍 ZKTeco User test result:", result);
 
         resolve(NextResponse.json(result));
       });

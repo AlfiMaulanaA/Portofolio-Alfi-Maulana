@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
 
         setTimeout(() => {
           if (!ffmpeg.killed) {
+            console.log("🔪 Force killing FFmpeg process...");
             ffmpeg.kill("SIGKILL");
           }
         }, 2000);

@@ -106,6 +106,7 @@ export function FaceRegistrationModal({
   const captureFrame = async () => {
     try {
       setStatus("capturing");
+      console.log("📸 Capturing frame from RTSP...");
 
       const response = await fetch("/api/capture-frame", {
         method: "POST",
@@ -180,6 +181,7 @@ export function FaceRegistrationModal({
       let faceApiId = user.face_api_id;
 
       if (!faceApiId) {
+        console.log("👤 Creating personnel for user:", user.name);
         const personnelResult = await faceApiService.createPersonnel({
           name: user.name,
           department: "Default",
@@ -192,10 +194,15 @@ export function FaceRegistrationModal({
         }
 
         faceApiId = personnelResult.id;
+        console.log("✅ Personnel created with ID:", faceApiId);
       }
 
+      // Upload photo to Face API
+      console.log("📤 Uploading photo for personnel ID:", faceApiId);
       await faceApiService.uploadPhoto(faceApiId, capturedImage);
 
+      // Register biometric in local database
+      console.log("📝 Registering face biometric in database...");
       const biometricResponse = await fetch(
         `/api/users/${user.id}/register-biometric`,
         {

@@ -88,7 +88,7 @@ export function useMqttPalmRecognition() {
 
       const response = await fetch("/api/history/today");
       const result = await response.json();
-
+      console.log("Fetched today's stats:", result);
       if (result.success) {
         setState((prev) => ({
           ...prev,

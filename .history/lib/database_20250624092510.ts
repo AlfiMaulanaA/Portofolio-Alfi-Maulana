@@ -377,6 +377,7 @@ class DatabaseService {
       return this.getUserById(id);
     }
 
+    console.log(`📝 Updating ZKTeco UID to ${zktecoUid} for user ID ${id}`);
     const result = this.updateUser(id, { zkteco_uid: zktecoUid });
 
     if (result) {
@@ -408,6 +409,8 @@ class DatabaseService {
   }
 
   public createHistoryLog(logData: CreateHistoryLogData): HistoryLog {
+    console.log("📝 Creating history log:", logData);
+
     // Validate user_id if provided
     if (logData.user_id) {
       const userExists = this.getUserById(logData.user_id);
@@ -438,6 +441,14 @@ class DatabaseService {
       const newLog = this.db
         .prepare("SELECT * FROM history_logs WHERE id = ?")
         .get(result.lastInsertRowid) as HistoryLog;
+
+      console.log("✅ History log created successfully:", {
+        id: newLog.id,
+        user_name: newLog.user_name,
+        recognition_type: newLog.recognition_type,
+        result: newLog.result,
+        device_id: newLog.device_id,
+      });
 
       return newLog;
     } catch (error) {

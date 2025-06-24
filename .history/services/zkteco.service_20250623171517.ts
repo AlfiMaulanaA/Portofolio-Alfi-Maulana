@@ -42,6 +42,10 @@ export class ZKTecoService {
     if (!fs.existsSync(this.pythonScriptPath)) {
       fs.mkdirSync(this.pythonScriptPath, { recursive: true });
     }
+
+    console.log(
+      `🔧 ZKTeco Service initialized - Device: ${this.deviceIp}:${this.devicePort}`
+    );
   }
 
   public static getInstance(): ZKTecoService {
@@ -77,6 +81,10 @@ export class ZKTecoService {
         ...args,
       ];
 
+      console.log(`🔄 Executing ZKTeco script: ${scriptName}`);
+      console.log(`📋 Script path: ${scriptPath}`);
+      console.log(`📋 Python args: python ${pythonArgs.join(" ")}`);
+
       const pythonProcess = spawn("python3", pythonArgs);
       let stdout = "";
       let stderr = "";
@@ -84,6 +92,7 @@ export class ZKTecoService {
       pythonProcess.stdout.on("data", (data) => {
         const output = data.toString();
         stdout += output;
+        console.log(`📤 [${scriptName}] STDOUT:`, output.trim());
       });
 
       pythonProcess.stderr.on("data", (data) => {
@@ -93,6 +102,10 @@ export class ZKTecoService {
       });
 
       pythonProcess.on("close", (code) => {
+        console.log(`📋 [${scriptName}] Process exited with code: ${code}`);
+        console.log(`📋 [${scriptName}] Full STDOUT:`, stdout.trim());
+        console.log(`📋 [${scriptName}] Full STDERR:`, stderr.trim());
+
         if (code === 0) {
           try {
             // Try to parse the last line as JSON (the result)
@@ -101,12 +114,20 @@ export class ZKTecoService {
 
             if (lastLine && lastLine.startsWith("{")) {
               const result = JSON.parse(lastLine);
-
+              console.log(`✅ ZKTeco ${scriptName} success:`, result);
               resolve({ success: true, data: result });
             } else {
+              console.log(
+                `✅ ZKTeco ${scriptName} success (no JSON):`,
+                stdout.trim()
+              );
               resolve({ success: true, message: stdout.trim() });
             }
           } catch (error) {
+            console.log(
+              `✅ ZKTeco ${scriptName} success (parse error):`,
+              stdout.trim()
+            );
             resolve({ success: true, message: stdout.trim() });
           }
         } else {
@@ -167,12 +188,19 @@ export class ZKTecoService {
         this.connectionStatus.lastChecked &&
         Date.now() - this.connectionStatus.lastChecked.getTime() < 60000
       ) {
+        // Less than 1 minute ago
+        console.log("🔄 Using cached ZKTeco connection status (connected)");
         return {
           success: true,
           message: "Connection cached as successful",
           data: { cached: true },
         };
       }
+
+      console.log("🔄 Testing ZKTeco connection...");
+      console.log(
+        `📋 Device: ${this.deviceIp}:${this.devicePort}, Password: ${this.devicePassword}, Timeout: ${this.timeout}s`
+      );
 
       const result = await this.executePythonScript("test_connection");
 
@@ -206,6 +234,8 @@ export class ZKTecoService {
     password?: string;
   }): Promise<ZKTecoResponse> {
     try {
+      console.log("🔄 Creating ZKTeco user:", userData);
+
       // Test connection first
       const connectionTest = await this.testConnection();
       if (!connectionTest.success) {
@@ -227,12 +257,18 @@ export class ZKTecoService {
         args.push(userData.password);
       }
 
+      console.log(`📋 Creating user with args: [${args.join(", ")}]`);
+
       const result = await this.executePythonScript("create_user", args);
 
       if (result.success) {
         const userInfo = result.data?.user || {};
         const finalUid = userInfo.uid || userData.uid;
         const uidChanged = userInfo.uid_changed || false;
+
+        console.log(
+          `✅ ZKTeco user created successfully: ${userData.name} (UID: ${finalUid})`
+        );
 
         if (uidChanged) {
           console.log(
@@ -265,6 +301,8 @@ export class ZKTecoService {
 
   public async deleteUser(uid: number): Promise<ZKTecoResponse> {
     try {
+      console.log("🔄 Deleting ZKTeco user:", uid);
+
       // Test connection first
       const connectionTest = await this.testConnection();
       if (!connectionTest.success) {
@@ -290,6 +328,7 @@ export class ZKTecoService {
     password: string
   ): Promise<ZKTecoResponse> {
     try {
+      console.log("🔄 Setting ZKTeco user password:", uid);
       return await this.executePythonScript("set_password", [
         uid.toString(),
         password,
@@ -309,6 +348,13 @@ export class ZKTecoService {
     mode = "register"
   ): Promise<ZKTecoResponse> {
     try {
+      console.log(
+        "🔄 Enrolling fingerprint to ZKTeco:",
+        uid,
+        fingerIndex,
+        mode
+      );
+
       // Test connection first
       const connectionTest = await this.testConnection();
       if (!connectionTest.success) {
@@ -324,7 +370,9 @@ export class ZKTecoService {
       const result = await this.executePythonScript("enroll_finger", args);
 
       if (result.success) {
-        console.log(`✅ ZKTeco fingerprint enrollment successful: `);
+        console.log(
+          `✅ ZKTeco fingerprint enrollment successful: UID ${uid}, Finger ${fingerIndex}`
+        );
       } else {
         console.error(
           `❌ ZKTeco fingerprint enrollment failed: ${result.error}`
@@ -346,6 +394,8 @@ export class ZKTecoService {
     cardNumber: string
   ): Promise<ZKTecoResponse> {
     try {
+      console.log("🔄 Registering card to ZKTeco:", uid, cardNumber);
+
       // Test connection first
       const connectionTest = await this.testConnection();
       if (!connectionTest.success) {
@@ -361,7 +411,9 @@ export class ZKTecoService {
       const result = await this.executePythonScript("register_card", args);
 
       if (result.success) {
-        console.log(`✅ ZKTeco card registration successful:`);
+        console.log(
+          `✅ ZKTeco card registration successful: UID ${uid}, Card ${cardNumber}`
+        );
       } else {
         console.error(`❌ ZKTeco card registration failed: ${result.error}`);
       }
@@ -378,6 +430,7 @@ export class ZKTecoService {
 
   public async getAllUsers(): Promise<ZKTecoResponse> {
     try {
+      console.log("🔄 Getting all ZKTeco users...");
       return await this.executePythonScript("get_users");
     } catch (error) {
       console.error("❌ ZKTeco get users failed:", error);
@@ -390,6 +443,7 @@ export class ZKTecoService {
 
   public async clearAllData(): Promise<ZKTecoResponse> {
     try {
+      console.log("🔄 Clearing all ZKTeco data...");
       return await this.executePythonScript("clear_data");
     } catch (error) {
       console.error("❌ ZKTeco clear data failed:", error);
@@ -406,6 +460,8 @@ export class ZKTecoService {
     password?: string;
   }): Promise<ZKTecoResponse> {
     try {
+      console.log("🔄 Adding user to ZKTeco:", userData);
+
       // Test connection first
       const connectionTest = await this.testConnection();
       if (!connectionTest.success) {
@@ -422,10 +478,14 @@ export class ZKTecoService {
         userData.password || "",
       ];
 
+      console.log(`📋 Adding user with args: [${args.join(", ")}]`);
+
       const result = await this.executePythonScript("add_user", args);
 
       if (result.success) {
-        console.log(`✅ ZKTeco user added successfully: )`);
+        console.log(
+          `✅ ZKTeco user added successfully: ${userData.username} (UID: ${userData.uid})`
+        );
       } else {
         console.error(`❌ ZKTeco user addition failed: ${result.error}`);
       }
@@ -442,6 +502,8 @@ export class ZKTecoService {
 
   public async getLastUid(): Promise<ZKTecoResponse> {
     try {
+      console.log("🔄 Getting last UID from ZKTeco...");
+
       // Test connection first
       const connectionTest = await this.testConnection();
       if (!connectionTest.success) {
@@ -475,6 +537,8 @@ export class ZKTecoService {
   // Diagnostic method to check system requirements
   public async diagnoseSystem(): Promise<ZKTecoResponse> {
     try {
+      console.log("🔍 Running ZKTeco system diagnostics...");
+
       const diagnostics = {
         pythonAvailable: false,
         scriptsExist: false,

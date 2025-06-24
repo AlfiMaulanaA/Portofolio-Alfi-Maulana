@@ -45,6 +45,9 @@ export async function POST(request: NextRequest) {
     if (result.success && mode === "save") {
       // Update database to mark fingerprint as registered
       db.updateUserRegistration(user.id, "fingerprint", true);
+      console.log(
+        `✅ Fingerprint registration completed for user: ${user.name}`
+      );
     }
 
     return NextResponse.json({

@@ -8,6 +8,8 @@ export async function GET() {
     const zktecoService = ZKTecoService.getInstance();
     const diagnostics = await zktecoService.diagnoseSystem();
 
+    console.log("📋 Diagnostics completed:", diagnostics);
+
     return NextResponse.json({
       success: true,
       data: diagnostics,

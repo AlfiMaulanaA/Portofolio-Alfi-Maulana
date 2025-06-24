@@ -46,6 +46,7 @@ export class FaceApiService {
       process.env.FACE_API_BASE_URL ||
       process.env.NEXT_PUBLIC_FACE_VERIFY_API_URL?.replace("/verify", "") ||
       "https://face.iotech.my.id";
+    console.log(`🔧 Face API Service initialized - Base URL: ${this.apiUrl}`);
   }
 
   public static getInstance(): FaceApiService {
@@ -59,6 +60,8 @@ export class FaceApiService {
     data: PersonnelCreateRequest
   ): Promise<PersonnelCreateResponse> {
     try {
+      console.log("🔄 Creating personnel:", data);
+
       const response = await fetch(`${this.apiUrl}/personnel`, {
         method: "POST",
         headers: {
@@ -72,6 +75,7 @@ export class FaceApiService {
       }
 
       const result = await response.json();
+      console.log("✅ Personnel created:", result);
 
       return result;
     } catch (error) {
@@ -89,6 +93,8 @@ export class FaceApiService {
     imageBase64: string
   ): Promise<PhotoUploadResponse> {
     try {
+      console.log("🔄 Uploading photo for personnel:", personnelId);
+
       const response = await fetch(
         `${this.apiUrl}/personnel/${personnelId}/photo-b64`,
         {
@@ -107,6 +113,7 @@ export class FaceApiService {
       }
 
       const result = await response.json();
+      console.log("✅ Photo uploaded:", result);
 
       return result;
     } catch (error) {
@@ -123,6 +130,8 @@ export class FaceApiService {
     personnelId: number
   ): Promise<DeletePersonnelResponse> {
     try {
+      console.log("🔄 Deleting personnel:", personnelId);
+
       const response = await fetch(`${this.apiUrl}/personnel/${personnelId}`, {
         method: "DELETE",
         headers: {
@@ -135,6 +144,7 @@ export class FaceApiService {
       }
 
       const result = await response.json();
+      console.log("✅ Personnel deleted:", result);
 
       return result;
     } catch (error) {
@@ -149,6 +159,8 @@ export class FaceApiService {
 
   public async getPersonnel(personnelId: number): Promise<PersonnelResponse> {
     try {
+      console.log("🔄 Getting personnel:", personnelId);
+
       const response = await fetch(`${this.apiUrl}/personnel/${personnelId}`, {
         method: "GET",
         headers: {
@@ -161,6 +173,7 @@ export class FaceApiService {
       }
 
       const result = await response.json();
+      console.log("✅ Personnel retrieved:", result);
 
       return result;
     } catch (error) {
@@ -175,6 +188,8 @@ export class FaceApiService {
 
   public async getAllPersonnel(): Promise<PersonnelResponse[]> {
     try {
+      console.log("🔄 Getting all personnel...");
+
       const response = await fetch(`${this.apiUrl}/personnel`, {
         method: "GET",
         headers: {
@@ -187,6 +202,7 @@ export class FaceApiService {
       }
 
       const result = await response.json();
+      console.log("✅ All personnel retrieved:", result);
 
       return result;
     } catch (error) {
@@ -201,6 +217,8 @@ export class FaceApiService {
 
   public async refreshDatabase(): Promise<RefreshResponse> {
     try {
+      console.log("🔄 Refreshing face database...");
+
       const response = await fetch(`${this.apiUrl}/refresh`, {
         method: "GET",
         headers: {
@@ -213,6 +231,7 @@ export class FaceApiService {
       }
 
       const result = await response.json();
+      console.log("✅ Database refreshed:", result);
 
       return result;
     } catch (error) {

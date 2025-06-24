@@ -12,6 +12,10 @@ export async function POST(request: NextRequest) {
         process.env.RTSP_CAMERA_PORT || "554"
       }/Streaming/Channels/${process.env.RTSP_CAMERA_CHANNEL || "101"}`;
 
+    console.log(
+      `🎥 Capturing frame from RTSP: ${rtspUrl.replace(/:[^:@]*@/, ":***@")}`
+    );
+
     return new Promise((resolve, reject) => {
       const ffmpeg = spawn("ffmpeg", [
         "-rtsp_transport",
@@ -39,6 +43,7 @@ export async function POST(request: NextRequest) {
 
       ffmpeg.stderr.on("data", (data) => {
         errorOutput += data.toString();
+        console.log(`📹 FFmpeg: ${data}`);
       });
 
       ffmpeg.on("error", (error) => {
@@ -56,9 +61,14 @@ export async function POST(request: NextRequest) {
       });
 
       ffmpeg.on("close", (code) => {
+        console.log(`🎬 FFmpeg process closed with code: ${code}`);
+
         if (code === 0 && frameData.length > 0) {
           // Convert to base64
           const base64Frame = frameData.toString("base64");
+          console.log(
+            `✅ Frame captured successfully, size: ${frameData.length} bytes`
+          );
 
           resolve(
             NextResponse.json({
@@ -89,10 +99,12 @@ export async function POST(request: NextRequest) {
 
       // Increase timeout to 30 seconds for better reliability
       setTimeout(() => {
+        console.log("⏰ FFmpeg capture timeout, terminating process...");
         ffmpeg.kill("SIGTERM");
 
         setTimeout(() => {
           if (!ffmpeg.killed) {
+            console.log("🔪 Force killing FFmpeg process...");
             ffmpeg.kill("SIGKILL");
           }
         }, 2000);

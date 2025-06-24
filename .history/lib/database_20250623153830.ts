@@ -83,6 +83,8 @@ class DatabaseService {
 
     // Initialize tables
     this.initializeTables();
+
+    console.log("✅ SQLite database initialized at:", dbPath);
   }
 
   public static getInstance(): DatabaseService {
@@ -130,6 +132,7 @@ class DatabaseService {
         this.db.exec(
           `ALTER TABLE users ADD COLUMN face_api_id INTEGER DEFAULT NULL`
         );
+        console.log("✅ Added face_api_id column to users table");
       } catch (error) {
         console.error("Error adding face_api_id column:", error);
       }
@@ -141,6 +144,7 @@ class DatabaseService {
         this.db.exec(
           `ALTER TABLE users ADD COLUMN zkteco_uid INTEGER DEFAULT NULL`
         );
+        console.log("✅ Added zkteco_uid column to users table");
       } catch (error) {
         console.error("Error adding zkteco_uid column:", error);
       }
@@ -184,6 +188,9 @@ class DatabaseService {
         `CREATE INDEX IF NOT EXISTS idx_users_zkteco_uid ON users(zkteco_uid);`
       );
     }
+
+    // NO DEFAULT ADMIN USER - Clean database
+    console.log("✅ Database initialized with clean user table");
   }
 
   // Helper function to convert SQLite integers to booleans
@@ -256,6 +263,7 @@ class DatabaseService {
 
   public getNextSequentialZktecoUid(): number {
     if (!this.checkColumnExists("users", "zkteco_uid")) {
+      console.log("📝 zkteco_uid column doesn't exist, starting from UID 1");
       return 1;
     }
 
@@ -266,6 +274,11 @@ class DatabaseService {
       .get() as { max_uid: number | null };
 
     const nextUid = (result.max_uid || 0) + 1;
+    console.log(
+      `📝 Next sequential ZKTeco UID from database: ${nextUid} (max existing: ${
+        result.max_uid || 0
+      })`
+    );
 
     return nextUid;
   }
@@ -347,11 +360,16 @@ class DatabaseService {
     registered: boolean
   ): User | null {
     const field = `${type}_registered`;
+    console.log(`📝 Updating ${field} to ${registered} for user ID ${id}`);
 
     const result = this.updateUser(id, { [field]: registered });
 
     if (result) {
-      console.log(`✅ Database updated successfully:`);
+      console.log(`✅ Database updated successfully:`, {
+        userId: result.id,
+        name: result.name,
+        [field]: result[field as keyof User],
+      });
     } else {
       console.error(`❌ Failed to update ${field} for user ID ${id}`);
     }
@@ -377,6 +395,7 @@ class DatabaseService {
       return this.getUserById(id);
     }
 
+    console.log(`📝 Updating ZKTeco UID to ${zktecoUid} for user ID ${id}`);
     const result = this.updateUser(id, { zkteco_uid: zktecoUid });
 
     if (result) {
@@ -408,6 +427,8 @@ class DatabaseService {
   }
 
   public createHistoryLog(logData: CreateHistoryLogData): HistoryLog {
+    console.log("📝 Creating history log:", logData);
+
     // Validate user_id if provided
     if (logData.user_id) {
       const userExists = this.getUserById(logData.user_id);
@@ -438,6 +459,14 @@ class DatabaseService {
       const newLog = this.db
         .prepare("SELECT * FROM history_logs WHERE id = ?")
         .get(result.lastInsertRowid) as HistoryLog;
+
+      console.log("✅ History log created successfully:", {
+        id: newLog.id,
+        user_name: newLog.user_name,
+        recognition_type: newLog.recognition_type,
+        result: newLog.result,
+        device_id: newLog.device_id,
+      });
 
       return newLog;
     } catch (error) {

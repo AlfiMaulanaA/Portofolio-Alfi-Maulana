@@ -75,6 +75,10 @@ export async function POST(
       device_id: body.deviceId || "palm_scanner_001",
     });
 
+    console.log("Palm data saved successfully for user:", id);
+    console.log("Updated user:", updatedUser);
+    console.log("History log created:", historyLog);
+
     return NextResponse.json({
       success: true,
       message: "Palm data saved successfully",
