@@ -24,6 +24,13 @@ import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
   Users,
   Plus,
   CreditCard,
@@ -34,12 +41,14 @@ import {
   Trash2,
   Loader2,
   Shield,
+  MoreVertical,
 } from "lucide-react";
 import { BiometricRegistrationModal } from "@/components/biometric-registration-modal";
 import { PalmVeinUsersTable } from "@/components/palm-vein-users-table";
 import { PasswordProtection } from "@/components/password-protection";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
+import { BiometricDeletionModal } from "@/components/biometric-deletion-modal";
 
 const MySwal = withReactContent(Swal);
 
@@ -53,6 +62,7 @@ interface User {
   fingerprint_registered: boolean;
   palm_registered: boolean;
   face_registered: boolean;
+  zkteco_uid?: number | null;
   created_at: string;
   updated_at: string;
   last_seen: string | null;
@@ -91,13 +101,30 @@ export default function UserManagement() {
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+
+  // Loading states for different operations
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+  const [isDeletingUser, setIsDeletingUser] = useState<number | null>(null);
+
+  // Deletion modal states
+  const [isDeletionModalOpen, setIsDeletionModalOpen] = useState(false);
+  const [deletionUser, setDeletionUser] = useState<User | null>(null);
+  const [deletionType, setDeletionType] = useState<
+    "card" | "fingerprint" | "palm" | "face" | null
+  >(null);
+
   const [formData, setFormData] = useState<CreateUserData>({
     name: "",
     email: "",
     department: "",
     status: "active",
   });
-
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUsers();
+    }
+  }, [isAuthenticated]);
   // Handle password authentication
   const handlePasswordSuccess = () => {
     setIsAuthenticated(true);
@@ -117,37 +144,34 @@ export default function UserManagement() {
     });
   };
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchUsers();
-    }
-  }, [isAuthenticated]);
   const handlePasswordCancel = () => {
     // Redirect back to dashboard
     window.location.href = "/";
   };
 
-  // Fetch users from API
-  const fetchUsers = async () => {
+  // Fetch users from API (silent refresh without loading indicators)
+  const fetchUsers = async (showLoading = true) => {
     if (!isAuthenticated) return;
 
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
 
-      // Show loading toast
-      MySwal.fire({
-        title: "Loading Users...",
-        text: "Fetching user data from server",
-        icon: "info",
-        showConfirmButton: false,
-        allowOutsideClick: false,
-        customClass: {
-          container: "swal2-container-high-z",
-        },
-        didOpen: () => {
-          Swal.showLoading();
-        },
-      });
+        // Show loading toast only for initial load
+        MySwal.fire({
+          title: "Loading Users...",
+          text: "Fetching user data from server",
+          icon: "info",
+          showConfirmButton: false,
+          allowOutsideClick: false,
+          customClass: {
+            container: "swal2-container-high-z",
+          },
+          didOpen: () => {
+            Swal.showLoading();
+          },
+        });
+      }
 
       const response = await fetch("/api/users");
       const result = await response.json();
@@ -156,46 +180,58 @@ export default function UserManagement() {
         setUsers(result.data);
         setStats(result.stats);
 
-        // Show success message with user count
-        MySwal.fire({
-          title: "✅ Data Loaded Successfully!",
-          text: `Found ${result.data.length} users in the system`,
-          icon: "success",
-          timer: 1500,
-          timerProgressBar: true,
-          showConfirmButton: false,
-          customClass: {
-            container: "swal2-container-high-z",
-          },
-        });
+        if (showLoading) {
+          // Show success message with user count only for initial load
+          MySwal.fire({
+            title: "✅ Data Loaded Successfully!",
+            text: `Found ${result.data.length} users in the system`,
+            icon: "success",
+            timer: 1500,
+            timerProgressBar: true,
+            showConfirmButton: false,
+            customClass: {
+              container: "swal2-container-high-z",
+            },
+          });
+        }
       } else {
+        if (showLoading) {
+          MySwal.fire({
+            title: "Error",
+            text: result.error || "Failed to fetch users",
+            icon: "error",
+            customClass: {
+              container: "swal2-container-high-z",
+            },
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      if (showLoading) {
         MySwal.fire({
-          title: "Error",
-          text: result.error || "Failed to fetch users",
+          title: "Connection Error",
+          text: "Failed to connect to server. Please check your connection.",
           icon: "error",
           customClass: {
             container: "swal2-container-high-z",
           },
         });
       }
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      MySwal.fire({
-        title: "Connection Error",
-        text: "Failed to connect to server. Please check your connection.",
-        icon: "error",
-        customClass: {
-          container: "swal2-container-high-z",
-        },
-      });
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
   // Create new user
   const createUser = async (userData: CreateUserData) => {
+    if (isCreatingUser) return; // Prevent double submission
+
     try {
+      setIsCreatingUser(true);
+
       const response = await fetch("/api/users", {
         method: "POST",
         headers: {
@@ -216,7 +252,10 @@ export default function UserManagement() {
             container: "swal2-container-high-z",
           },
         });
-        fetchUsers(); // Refresh the list
+
+        // Silent refresh without loading indicators
+        await fetchUsers(false);
+
         setIsAddUserOpen(false);
         setFormData({ name: "", email: "", department: "", status: "active" });
       } else {
@@ -239,6 +278,8 @@ export default function UserManagement() {
           container: "swal2-container-high-z",
         },
       });
+    } finally {
+      setIsCreatingUser(false);
     }
   };
 
@@ -247,7 +288,11 @@ export default function UserManagement() {
     userId: number,
     userData: Partial<CreateUserData>
   ) => {
+    if (isUpdatingUser) return; // Prevent double submission
+
     try {
+      setIsUpdatingUser(true);
+
       const response = await fetch(`/api/users/${userId}`, {
         method: "PUT",
         headers: {
@@ -268,7 +313,10 @@ export default function UserManagement() {
             container: "swal2-container-high-z",
           },
         });
-        fetchUsers(); // Refresh the list
+
+        // Silent refresh without loading indicators
+        await fetchUsers(false);
+
         setIsEditUserOpen(false);
         setEditingUser(null);
       } else {
@@ -291,19 +339,52 @@ export default function UserManagement() {
           container: "swal2-container-high-z",
         },
       });
+    } finally {
+      setIsUpdatingUser(false);
     }
   };
 
-  // Delete user
+  // Delete user with MQTT command for ZKTeco
   const deleteUser = async (userId: number, userName: string) => {
+    if (isDeletingUser === userId) return; // Prevent double submission
+
+    const user = users.find((u) => u.id === userId);
+
     const result = await MySwal.fire({
       title: "Are you sure?",
-      text: `Delete user "${userName}"? This action cannot be undone.`,
+      html: `
+        <div class="text-left space-y-3">
+          <p>You are about to delete user: <strong>${userName}</strong></p>
+          <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p class="text-sm text-red-800 font-medium">⚠️ This will permanently delete:</p>
+            <ul class="text-sm text-red-700 mt-2 space-y-1">
+              <li>• User from local database</li>
+              ${user?.face_registered ? "<li>• Face recognition data</li>" : ""}
+              ${user?.palm_registered ? "<li>• Palm vein data</li>" : ""}
+              ${
+                user?.zkteco_uid
+                  ? "<li>• ZKTeco device user (UID: " +
+                    user.zkteco_uid +
+                    ")</li>"
+                  : ""
+              }
+              ${user?.card_registered ? "<li>• Card registration</li>" : ""}
+              ${
+                user?.fingerprint_registered
+                  ? "<li>• Fingerprint templates</li>"
+                  : ""
+              }
+            </ul>
+          </div>
+          <p class="text-sm text-gray-600">This action cannot be undone!</p>
+        </div>
+      `,
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#d33",
-      cancelButtonColor: "#3085d6",
-      confirmButtonText: "Yes, delete it!",
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Yes, delete everything!",
+      cancelButtonText: "Cancel",
       customClass: {
         container: "swal2-container-high-z",
       },
@@ -311,6 +392,27 @@ export default function UserManagement() {
 
     if (result.isConfirmed) {
       try {
+        setIsDeletingUser(userId);
+
+        // Show progress dialog
+        MySwal.fire({
+          title: "Deleting User...",
+          html: `
+            <div class="text-center">
+              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto mb-4"></div>
+              <p>Removing user from all systems...</p>
+              <div class="text-sm text-gray-600 mt-2">
+                This may take a few moments
+              </div>
+            </div>
+          `,
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          customClass: {
+            container: "swal2-container-high-z",
+          },
+        });
+
         const response = await fetch(`/api/users/${userId}`, {
           method: "DELETE",
         });
@@ -319,35 +421,85 @@ export default function UserManagement() {
 
         if (apiResult.success) {
           MySwal.fire({
-            title: "Deleted!",
-            text: "User has been deleted.",
+            title: "✅ User Deleted Successfully!",
+            html: `
+              <div class="text-left space-y-2">
+                <p><strong>${userName}</strong> has been completely removed from:</p>
+                <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <ul class="text-sm text-green-700 space-y-1">
+                    <li>✅ Local database</li>
+                    ${
+                      apiResult.details?.faceApi?.includes("Deleted")
+                        ? "<li>✅ Face recognition system</li>"
+                        : ""
+                    }
+                    ${
+                      apiResult.details?.palm?.includes("Deleted")
+                        ? "<li>✅ Palm vein system</li>"
+                        : ""
+                    }
+                    ${
+                      apiResult.details?.zkteco?.includes("Deleted")
+                        ? "<li>✅ ZKTeco access control</li>"
+                        : ""
+                    }
+                    ${
+                      apiResult.details?.zktecoCard?.includes("Deleted")
+                        ? "<li>✅ Card registrations</li>"
+                        : ""
+                    }
+                    ${
+                      apiResult.details?.zktecoFingerprint?.includes("Deleted")
+                        ? "<li>✅ Fingerprint templates</li>"
+                        : ""
+                    }
+                  </ul>
+                </div>
+              </div>
+            `,
             icon: "success",
-            timer: 2000,
+            timer: 4000,
             customClass: {
               container: "swal2-container-high-z",
             },
           });
-          fetchUsers(); // Refresh the list
+
+          // Silent refresh without loading indicators
+          await fetchUsers(false);
         } else {
           MySwal.fire({
-            title: "Error",
-            text: apiResult.error || "Failed to delete user",
-            icon: "error",
+            title: "Partial Deletion",
+            html: `
+              <div class="text-left space-y-2">
+                <p>User deletion completed with some issues:</p>
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p class="text-sm text-yellow-800">${
+                    apiResult.error || "Some systems may not have been updated"
+                  }</p>
+                </div>
+              </div>
+            `,
+            icon: "warning",
             customClass: {
               container: "swal2-container-high-z",
             },
           });
+
+          // Still refresh to show updated data
+          await fetchUsers(false);
         }
       } catch (error) {
         console.error("Error deleting user:", error);
         MySwal.fire({
-          title: "Error",
-          text: "Failed to connect to server",
+          title: "Deletion Failed",
+          text: "Failed to connect to server. Please try again.",
           icon: "error",
           customClass: {
             container: "swal2-container-high-z",
           },
         });
+      } finally {
+        setIsDeletingUser(null);
       }
     }
   };
@@ -367,28 +519,9 @@ export default function UserManagement() {
 
   // Handle registration complete
   const handleRegistrationComplete = async () => {
-    if (selectedUser && registrationType) {
-      try {
-        const response = await fetch(
-          `/api/users/${selectedUser.id}/register-biometric`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ type: registrationType }),
-          }
-        );
+    // Silent refresh to update user data immediately
+    await fetchUsers(false);
 
-        const result = await response.json();
-
-        if (result.success) {
-          fetchUsers(); // Refresh the list
-        }
-      } catch (error) {
-        console.error("Error updating registration:", error);
-      }
-    }
     setIsModalOpen(false);
     setSelectedUser(null);
     setRegistrationType(null);
@@ -404,6 +537,39 @@ export default function UserManagement() {
       status: user.status,
     });
     setIsEditUserOpen(true);
+  };
+
+  // Handle biometric deletion
+  const handleBiometricDeletion = (
+    userId: number,
+    type: "card" | "fingerprint" | "palm" | "face"
+  ) => {
+    const user = users.find((u) => u.id === userId);
+    if (user) {
+      setDeletionUser(user);
+      setDeletionType(type);
+      setIsDeletionModalOpen(true);
+    }
+  };
+
+  // Handle deletion complete
+  const handleDeletionComplete = async () => {
+    // Silent refresh to update user data immediately
+    await fetchUsers(false);
+
+    setIsDeletionModalOpen(false);
+    setDeletionUser(null);
+    setDeletionType(null);
+  };
+
+  // Get biometric registration count
+  const getBiometricCount = (user: User) => {
+    let count = 0;
+    if (user.card_registered) count++;
+    if (user.fingerprint_registered) count++;
+    if (user.palm_registered) count++;
+    if (user.face_registered) count++;
+    return count;
   };
 
   // Show password protection if not authenticated
@@ -492,7 +658,7 @@ export default function UserManagement() {
         <div className="ml-auto">
           <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button disabled={isCreatingUser}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add User
               </Button>
@@ -511,6 +677,7 @@ export default function UserManagement() {
                       setFormData({ ...formData, name: e.target.value })
                     }
                     placeholder="Enter full name"
+                    disabled={isCreatingUser}
                   />
                 </div>
                 <div>
@@ -523,6 +690,7 @@ export default function UserManagement() {
                       setFormData({ ...formData, email: e.target.value })
                     }
                     placeholder="Enter email address"
+                    disabled={isCreatingUser}
                   />
                 </div>
                 <div>
@@ -534,6 +702,7 @@ export default function UserManagement() {
                       setFormData({ ...formData, department: e.target.value })
                     }
                     placeholder="Enter department"
+                    disabled={isCreatingUser}
                   />
                 </div>
                 <div>
@@ -543,6 +712,7 @@ export default function UserManagement() {
                     onValueChange={(value: "active" | "inactive") =>
                       setFormData({ ...formData, status: value })
                     }
+                    disabled={isCreatingUser}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -557,13 +727,22 @@ export default function UserManagement() {
                   <Button
                     onClick={() => createUser(formData)}
                     className="flex-1"
+                    disabled={isCreatingUser}
                   >
-                    Create User
+                    {isCreatingUser ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create User"
+                    )}
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setIsAddUserOpen(false)}
                     className="flex-1"
+                    disabled={isCreatingUser}
                   >
                     Cancel
                   </Button>
@@ -632,20 +811,26 @@ export default function UserManagement() {
           <TabsContent value="local-users" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Local User Directory</CardTitle>
+                <CardTitle>User Directory</CardTitle>
+                <div className="text-sm text-muted-foreground">
+                  Manage user accounts and biometric registrations
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left p-2">Name</th>
-                        <th className="text-left p-2">Email</th>
-                        <th className="text-left p-2">Department</th>
-                        <th className="text-left p-2">Status</th>
-                        <th className="text-left p-2">Registrations</th>
-                        <th className="text-left p-2">Last Seen</th>
-                        <th className="text-left p-2">Actions</th>
+                        <th className="text-left p-3 font-medium">User Info</th>
+                        <th className="text-left p-3 font-medium">
+                          Department
+                        </th>
+                        <th className="text-left p-3 font-medium">Status</th>
+                        <th className="text-left p-3 font-medium">
+                          Biometrics
+                        </th>
+                        <th className="text-left p-3 font-medium">Last Seen</th>
+                        <th className="text-left p-3 font-medium">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -654,12 +839,23 @@ export default function UserManagement() {
                           key={user.id}
                           className="border-b hover:bg-muted/50"
                         >
-                          <td className="p-2 font-medium">{user.name}</td>
-                          <td className="p-2 text-muted-foreground">
-                            {user.email}
+                          <td className="p-3">
+                            <div className="space-y-1">
+                              <div className="font-medium">{user.name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {user.email}
+                              </div>
+                              {user.zkteco_uid && (
+                                <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded inline-block">
+                                  ZKTeco UID: {user.zkteco_uid}
+                                </div>
+                              )}
+                            </div>
                           </td>
-                          <td className="p-2">{user.department}</td>
-                          <td className="p-2">
+                          <td className="p-3">
+                            <Badge variant="outline">{user.department}</Badge>
+                          </td>
+                          <td className="p-3">
                             <Badge
                               variant={
                                 user.status === "active"
@@ -670,109 +866,208 @@ export default function UserManagement() {
                               {user.status}
                             </Badge>
                           </td>
-                          <td className="p-2">
-                            <div className="flex gap-1">
-                              <Badge
-                                variant={
-                                  user.card_registered ? "default" : "outline"
-                                }
-                                className="text-xs"
-                              >
-                                Card
-                              </Badge>
-                              <Badge
-                                variant={
-                                  user.fingerprint_registered
-                                    ? "default"
-                                    : "outline"
-                                }
-                                className="text-xs"
-                              >
-                                Finger
-                              </Badge>
-                              <Badge
-                                variant={
-                                  user.palm_registered ? "default" : "outline"
-                                }
-                                className="text-xs"
-                              >
-                                Palm
-                              </Badge>
-                              <Badge
-                                variant={
-                                  user.face_registered ? "default" : "outline"
-                                }
-                                className="text-xs"
-                              >
-                                Face
-                              </Badge>
+                          <td className="p-3">
+                            <div className="space-y-2">
+                              <div className="flex gap-1 flex-wrap">
+                                <Badge
+                                  variant={
+                                    user.card_registered ? "default" : "outline"
+                                  }
+                                  className={`text-xs ${
+                                    user.card_registered ? "bg-green-500" : ""
+                                  }`}
+                                >
+                                  <CreditCard className="h-3 w-3 mr-1" />
+                                  Card
+                                </Badge>
+                                <Badge
+                                  variant={
+                                    user.fingerprint_registered
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  className={`text-xs ${
+                                    user.fingerprint_registered
+                                      ? "bg-green-500"
+                                      : ""
+                                  }`}
+                                >
+                                  <Fingerprint className="h-3 w-3 mr-1" />
+                                  Finger
+                                </Badge>
+                                <Badge
+                                  variant={
+                                    user.palm_registered ? "default" : "outline"
+                                  }
+                                  className={`text-xs ${
+                                    user.palm_registered ? "bg-green-500" : ""
+                                  }`}
+                                >
+                                  <Hand className="h-3 w-3 mr-1" />
+                                  Palm
+                                </Badge>
+                                <Badge
+                                  variant={
+                                    user.face_registered ? "default" : "outline"
+                                  }
+                                  className={`text-xs ${
+                                    user.face_registered ? "bg-green-500" : ""
+                                  }`}
+                                >
+                                  <Camera className="h-3 w-3 mr-1" />
+                                  Face
+                                </Badge>
+                              </div>
+
+                              {/* Register Buttons */}
+                              <div className="flex gap-1 flex-wrap">
+                                {!user.card_registered && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleRegistration(user.id, "card")
+                                    }
+                                    className="text-xs h-6 px-2"
+                                  >
+                                    <CreditCard className="h-3 w-3 mr-1" />
+                                    Card
+                                  </Button>
+                                )}
+                                {!user.fingerprint_registered && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleRegistration(user.id, "fingerprint")
+                                    }
+                                    className="text-xs h-6 px-2"
+                                  >
+                                    <Fingerprint className="h-3 w-3 mr-1" />
+                                    Finger
+                                  </Button>
+                                )}
+                                {!user.palm_registered && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleRegistration(user.id, "palm")
+                                    }
+                                    className="text-xs h-6 px-2"
+                                  >
+                                    <Hand className="h-3 w-3 mr-1" />
+                                    Palm
+                                  </Button>
+                                )}
+                                {!user.face_registered && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleRegistration(user.id, "face")
+                                    }
+                                    className="text-xs h-6 px-2"
+                                  >
+                                    <Camera className="h-3 w-3 mr-1" />
+                                    Face
+                                  </Button>
+                                )}
+                              </div>
+
+                              <div className="text-xs text-muted-foreground">
+                                {getBiometricCount(user)}/4 registered
+                              </div>
                             </div>
                           </td>
-                          <td className="p-2 text-sm text-muted-foreground">
+                          <td className="p-3 text-sm text-muted-foreground">
                             {user.last_seen
                               ? new Date(user.last_seen).toLocaleString()
                               : "Never"}
                           </td>
-                          <td className="p-2">
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  handleRegistration(user.id, "card")
-                                }
-                                disabled={user.card_registered}
-                              >
-                                <CreditCard className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  handleRegistration(user.id, "fingerprint")
-                                }
-                                disabled={user.fingerprint_registered}
-                              >
-                                <Fingerprint className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  handleRegistration(user.id, "palm")
-                                }
-                                disabled={user.palm_registered}
-                              >
-                                <Hand className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  handleRegistration(user.id, "face")
-                                }
-                                disabled={user.face_registered}
-                              >
-                                <Camera className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEditUser(user)}
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => deleteUser(user.id, user.name)}
-                                disabled={
-                                  user.email === "admin@biometric.system"
-                                }
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
+                          <td className="p-3">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56">
+                                {/* Deletion Actions */}
+                                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                                  Delete Biometric
+                                </div>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleBiometricDeletion(user.id, "card")
+                                  }
+                                  disabled={!user.card_registered}
+                                  className="text-sm text-red-600"
+                                >
+                                  <CreditCard className="h-4 w-4 mr-2" />
+                                  Delete Card
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleBiometricDeletion(
+                                      user.id,
+                                      "fingerprint"
+                                    )
+                                  }
+                                  disabled={!user.fingerprint_registered}
+                                  className="text-sm text-red-600"
+                                >
+                                  <Fingerprint className="h-4 w-4 mr-2" />
+                                  Delete Fingerprint
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleBiometricDeletion(user.id, "palm")
+                                  }
+                                  disabled={!user.palm_registered}
+                                  className="text-sm text-red-600"
+                                >
+                                  <Hand className="h-4 w-4 mr-2" />
+                                  Delete Palm
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleBiometricDeletion(user.id, "face")
+                                  }
+                                  disabled={!user.face_registered}
+                                  className="text-sm text-red-600"
+                                >
+                                  <Camera className="h-4 w-4 mr-2" />
+                                  Delete Face
+                                </DropdownMenuItem>
+
+                                <DropdownMenuSeparator />
+
+                                {/* User Management */}
+                                <DropdownMenuItem
+                                  onClick={() => handleEditUser(user)}
+                                  className="text-sm"
+                                >
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit User
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => deleteUser(user.id, user.name)}
+                                  disabled={
+                                    user.email === "admin@biometric.system" ||
+                                    isDeletingUser === user.id
+                                  }
+                                  className="text-sm text-red-600"
+                                >
+                                  {isDeletingUser === user.id ? (
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                  )}
+                                  Delete User
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </td>
                         </tr>
                       ))}
@@ -805,6 +1100,7 @@ export default function UserManagement() {
                   setFormData({ ...formData, name: e.target.value })
                 }
                 placeholder="Enter full name"
+                disabled={isUpdatingUser}
               />
             </div>
             <div>
@@ -817,6 +1113,7 @@ export default function UserManagement() {
                   setFormData({ ...formData, email: e.target.value })
                 }
                 placeholder="Enter email address"
+                disabled={isUpdatingUser}
               />
             </div>
             <div>
@@ -828,6 +1125,7 @@ export default function UserManagement() {
                   setFormData({ ...formData, department: e.target.value })
                 }
                 placeholder="Enter department"
+                disabled={isUpdatingUser}
               />
             </div>
             <div>
@@ -837,6 +1135,7 @@ export default function UserManagement() {
                 onValueChange={(value: "active" | "inactive") =>
                   setFormData({ ...formData, status: value })
                 }
+                disabled={isUpdatingUser}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -853,13 +1152,22 @@ export default function UserManagement() {
                   editingUser && updateUser(editingUser.id, formData)
                 }
                 className="flex-1"
+                disabled={isUpdatingUser}
               >
-                Update User
+                {isUpdatingUser ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update User"
+                )}
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setIsEditUserOpen(false)}
                 className="flex-1"
+                disabled={isUpdatingUser}
               >
                 Cancel
               </Button>
@@ -874,6 +1182,13 @@ export default function UserManagement() {
         onComplete={handleRegistrationComplete}
         user={selectedUser}
         type={registrationType}
+      />
+      <BiometricDeletionModal
+        isOpen={isDeletionModalOpen}
+        onClose={() => setIsDeletionModalOpen(false)}
+        onComplete={handleDeletionComplete}
+        user={deletionUser}
+        type={deletionType}
       />
     </SidebarInset>
   );

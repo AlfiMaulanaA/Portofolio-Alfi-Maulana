@@ -1,15 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
-import mqtt, { type MqttClient } from "mqtt";
 import Swal from "sweetalert2";
-
-interface MqttConfig {
-  brokerAddress: string;
-  port: number;
-  username: string;
-  password: string;
-  ssl: boolean;
-}
 
 interface ZKTecoCommandState {
   isConnected: boolean;
@@ -36,34 +27,20 @@ export function useMqttZKTecoCommand() {
     lastResponse: null,
   });
 
-  const clientRef = useRef<MqttClient | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const commandCallbackRef = useRef<
     ((response: CommandResponse) => void) | null
   >(null);
 
-  // Get MQTT configuration
-  const getMqttConfig = useCallback((): MqttConfig => {
-    return {
-      brokerAddress: "192.168.1.86",
-      port: Number.parseInt(process.env.NEXT_PUBLIC_MQTT_BROKER_PORT || "1883"),
-      username: process.env.NEXT_PUBLIC_MQTT_USERNAME || "",
-      password: process.env.NEXT_PUBLIC_MQTT_PASSWORD || "",
-      ssl: process.env.NEXT_PUBLIC_MQTT_BROKER_SSL === "true",
-    };
-  }, []);
-
-  // Connect to MQTT broker
+  // Connect to Server-Sent Events for real-time updates
   const connect = useCallback(async () => {
-    if (clientRef.current?.connected) {
+    if (eventSourceRef.current) {
       return true;
     }
 
     if (state.isConnecting) {
       return false;
     }
-
-    const config = getMqttConfig();
 
     setState((prev) => ({
       ...prev,
@@ -72,74 +49,53 @@ export function useMqttZKTecoCommand() {
     }));
 
     try {
-      const protocol = config.ssl ? "wss" : "ws";
-      const brokerUrl = `${protocol}://${config.brokerAddress}:${config.port}`;
+      const statusResponse = await fetch(
+        "/api/mqtt/zkteco-command?action=status"
+      );
+      const statusData = await statusResponse.json();
 
-      const client = mqtt.connect(brokerUrl, {
-        username: config.username,
-        password: config.password,
-        clean: true,
-        connectTimeout: 10000,
-        reconnectPeriod: 0,
-        keepalive: 60,
-        clientId: `zkteco_command_${Date.now()}`,
-      });
+      // Start Server-Sent Events connection
+      const eventSource = new EventSource("/api/mqtt/zkteco-command");
 
-      client.on("connect", () => {
-        // Subscribe to status topics
-        const topics = ["acs_front_status", "acs_rear_status"];
-
-        topics.forEach((topic) => {
-          client.subscribe(topic, { qos: 1 }, (err) => {
-            if (err) {
-              console.error(`❌ Failed to subscribe to ${topic}:`, err);
-            } else {
-              console.log(`📡 Subscribed to ${topic} topic`);
-            }
-          });
-        });
-
+      eventSource.onopen = () => {
         setState((prev) => ({
           ...prev,
           isConnected: true,
           isConnecting: false,
           error: null,
         }));
-      });
+      };
 
-      client.on("error", (error) => {
-        console.error("❌ ZKTeco Command MQTT Connection error:", error);
-        setState((prev) => ({
-          ...prev,
-          error: `Connection failed: ${error.message}`,
-          isConnected: false,
-          isConnecting: false,
-        }));
-      });
-
-      client.on("close", () => {
-        setState((prev) => ({
-          ...prev,
-          isConnected: false,
-          isConnecting: false,
-        }));
-
-        // Auto-reconnect
-        if (clientRef.current && !clientRef.current.disconnecting) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connect();
-          }, 5000);
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleServerMessage(data);
+        } catch (error) {
+          console.error("❌ Failed to parse SSE message:", error);
         }
-      });
+      };
 
-      client.on("message", (topic, message) => {
-        handleStatusMessage(topic, message.toString());
-      });
+      eventSource.onerror = (error) => {
+        console.error("❌ SSE Connection error:", error);
+        setState((prev) => ({
+          ...prev,
+          error: "Connection failed",
+          isConnected: false,
+          isConnecting: false,
+        }));
 
-      clientRef.current = client;
+        // Auto-reconnect after 5 seconds
+        setTimeout(() => {
+          if (!eventSourceRef.current) {
+            connect();
+          }
+        }, 5000);
+      };
+
+      eventSourceRef.current = eventSource;
       return true;
     } catch (error) {
-      console.error("❌ ZKTeco Command MQTT Setup error:", error);
+      console.error("❌ ZKTeco Command API Setup error:", error);
       setState((prev) => ({
         ...prev,
         error: `Setup failed: ${
@@ -150,45 +106,66 @@ export function useMqttZKTecoCommand() {
       }));
       return false;
     }
-  }, [getMqttConfig, state.isConnecting]);
+  }, [state.isConnecting]);
 
-  // Handle incoming status messages
-  const handleStatusMessage = useCallback(
-    (topic: string, messageStr: string) => {
-      try {
-        const response: CommandResponse = JSON.parse(messageStr);
+  // Handle incoming server messages
+  const handleServerMessage = useCallback((message: any) => {
+    if (message.type === "connection") {
+      setState((prev) => ({
+        ...prev,
+        isConnected: message.data.connected,
+        error: message.data.error,
+      }));
+    } else if (message.type === "status" && message.data) {
+      const response: CommandResponse = message.data;
 
-        setState((prev) => ({
-          ...prev,
-          currentMode: response.Mode,
-          currentStatus: response.Status,
-          lastResponse: response,
-        }));
+      setState((prev) => ({
+        ...prev,
+        currentMode: response.Mode,
+        currentStatus: response.Status,
+        lastResponse: response,
+      }));
 
-        // Call the callback if set
-        if (commandCallbackRef.current) {
-          commandCallbackRef.current(response);
-        }
-
-        // Handle specific status updates
-        handleStatusUpdate(response, topic);
-      } catch (error) {
-        console.error("❌ Failed to parse ZKTeco status message:", error);
+      // Call the callback if set
+      if (commandCallbackRef.current) {
+        commandCallbackRef.current(response);
       }
-    },
-    []
-  );
+
+      // Handle specific status updates
+      handleStatusUpdate(response, message.topic);
+    }
+  }, []);
 
   // Handle status updates with user notifications
   const handleStatusUpdate = useCallback(
     (response: CommandResponse, topic: string) => {
-      const device = topic.includes("front") ? "Front" : "Rear";
+      const device = topic?.includes("front") ? "Front" : "Rear";
 
       switch (response.Status) {
         case "progress change mode to register fp":
           Swal.fire({
             title: "Fingerprint Registration",
             text: `${device} device is preparing for fingerprint enrollment. Please wait...`,
+            icon: "info",
+            timer: 3000,
+            showConfirmButton: false,
+          });
+          break;
+
+        case "progress change mode to delete fp":
+          Swal.fire({
+            title: "Fingerprint Deletion",
+            text: `${device} device is preparing to delete fingerprint. Please wait...`,
+            icon: "info",
+            timer: 3000,
+            showConfirmButton: false,
+          });
+          break;
+
+        case "progress change mode to delete user":
+          Swal.fire({
+            title: "User Deletion",
+            text: `${device} device is preparing to delete user. Please wait...`,
             icon: "info",
             timer: 3000,
             showConfirmButton: false,
@@ -215,6 +192,16 @@ export function useMqttZKTecoCommand() {
           });
           break;
 
+        case "progress change mode to delete card":
+          Swal.fire({
+            title: "Card Deletion",
+            text: `${device} device is preparing to delete card. Please wait...`,
+            icon: "info",
+            timer: 3000,
+            showConfirmButton: false,
+          });
+          break;
+
         case "success":
           if (response.Mode === "register_fp" && response.Data) {
             Swal.fire({
@@ -225,6 +212,19 @@ export function useMqttZKTecoCommand() {
                 <p><strong>User ID:</strong> ${response.Data.uid}</p>
                 <p><strong>Finger ID:</strong> ${response.Data.fid}</p>
                 <p><strong>Template Size:</strong> ${response.Data.size} bytes</p>
+              </div>
+            `,
+              icon: "success",
+              timer: 5000,
+            });
+          } else if (response.Mode === "delete_fp" && response.Data) {
+            Swal.fire({
+              title: "Fingerprint Deleted!",
+              html: `
+              <div class="text-left">
+                <p><strong>Device:</strong> ${device}</p>
+                <p><strong>User ID:</strong> ${response.Data.uid}</p>
+                <p><strong>Finger ID:</strong> ${response.Data.fid}</p>
               </div>
             `,
               icon: "success",
@@ -243,37 +243,73 @@ export function useMqttZKTecoCommand() {
               icon: "success",
               timer: 5000,
             });
+          } else if (response.Mode === "delete_card" && response.Data) {
+            Swal.fire({
+              title: "Card Deleted!",
+              html: `
+              <div class="text-left">
+                <p><strong>Device:</strong> ${device}</p>
+                <p><strong>User ID:</strong> ${response.Data.uid}</p>
+              </div>
+            `,
+              icon: "success",
+              timer: 5000,
+            });
+          } else if (response.Mode === "delete_user" && response.Data) {
+            Swal.fire({
+              title: "User Deleted from ZKTeco!",
+              html: `
+              <div class="text-left">
+                <p><strong>Device:</strong> ${device}</p>
+                <p><strong>User ID:</strong> ${response.Data.UID}</p>
+                <p><strong>User Name:</strong> ${response.Data.user_name}</p>
+              </div>
+            `,
+              icon: "success",
+              timer: 5000,
+            });
+          }
+          break;
+
+        case "uid not found":
+          if (response.Mode === "delete_user") {
+            Swal.fire({
+              title: "User Not Found",
+              text: `User not found on ${device} device. May have been already deleted.`,
+              icon: "warning",
+              timer: 3000,
+            });
           }
           break;
 
         case "failed card not register in selected user":
-          Swal.fire({
-            title: "Card Registration Failed",
-            text: `Failed to register card on ${device} device. Please try again.`,
-            icon: "error",
-          });
-          break;
-
-        case "failed card not register in selected user":
-          Swal.fire({
-            title: "Card Deletion Failed",
-            text: `Failed to delete card on ${device} device. Card may not be registered.`,
-            icon: "error",
-          });
+          if (response.Mode === "delete_card") {
+            Swal.fire({
+              title: "Card Deletion Failed",
+              text: `No card found for this user on ${device} device.`,
+              icon: "warning",
+            });
+          } else {
+            Swal.fire({
+              title: "Card Registration Failed",
+              text: `Failed to register card on ${device} device. Please try again.`,
+              icon: "error",
+            });
+          }
           break;
       }
     },
     []
   );
 
-  // Send command to ZKTeco device
+  // Send command to ZKTeco device via API
   const sendCommand = useCallback(
-    (command: string, callback?: (response: CommandResponse) => void) => {
-      if (!clientRef.current?.connected) {
-        console.warn("⚠️ MQTT not connected, cannot send command");
+    async (command: string, callback?: (response: CommandResponse) => void) => {
+      if (!state.isConnected) {
+        console.warn("⚠️ Server not connected, cannot send command");
         Swal.fire({
           title: "Connection Error",
-          text: "MQTT connection not available. Please check connection.",
+          text: "Server connection not available. Please check connection.",
           icon: "error",
         });
         return false;
@@ -283,9 +319,17 @@ export function useMqttZKTecoCommand() {
       commandCallbackRef.current = callback || null;
 
       try {
-        // Send to both front and rear devices
-        clientRef.current.publish("acs_front_command", command, { qos: 1 });
-        clientRef.current.publish("acs_rear_command", command, { qos: 1 });
+        const response = await fetch("/api/mqtt/zkteco-command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ command }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to send command");
+        }
 
         return true;
       } catch (error) {
@@ -298,7 +342,7 @@ export function useMqttZKTecoCommand() {
         return false;
       }
     },
-    []
+    [state.isConnected]
   );
 
   // Register fingerprint
@@ -397,16 +441,80 @@ export function useMqttZKTecoCommand() {
     [sendCommand]
   );
 
-  // Disconnect from MQTT broker
-  const disconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
+  // Delete user from ZKTeco device
+  const deleteZKTecoUser = useCallback(
+    (uid: number) => {
+      const command = `mode;delete_user;${uid}`;
 
-    if (clientRef.current) {
-      clientRef.current.end(true);
-      clientRef.current = null;
+      return sendCommand(command, (response) => {
+        if (response.Status === "success" && response.Mode === "delete_user") {
+          console.log(`✅ User deleted from ZKTeco device: UID ${uid}`);
+          // Database will be updated by the main delete user API
+        } else if (
+          response.Status === "uid not found" &&
+          response.Mode === "delete_user"
+        ) {
+          console.log(`⚠️ User UID ${uid} not found on ZKTeco device`);
+          // This is not necessarily an error - user might have been deleted already
+        }
+      });
+    },
+    [sendCommand]
+  );
+
+  // Delete palm
+  const deletePalm = useCallback(async (userId: string) => {
+    try {
+      const response = await fetch("/api/palm/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          command: "delete",
+          user_id: userId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.status === "ok") {
+        Swal.fire({
+          title: "Palm Deleted!",
+          text: `Palm data has been deleted for user ${userId}`,
+          icon: "success",
+          timer: 3000,
+        });
+
+        // Update database to mark palm as not registered
+        fetch("/api/users/update-registration", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: userId,
+            type: "palm",
+            registered: false,
+          }),
+        }).catch(console.error);
+
+        return true;
+      } else {
+        throw new Error(result.message || "Failed to delete palm");
+      }
+    } catch (error) {
+      console.error("❌ Failed to delete palm:", error);
+      Swal.fire({
+        title: "Palm Deletion Failed",
+        text: error instanceof Error ? error.message : "Unknown error occurred",
+        icon: "error",
+      });
+      return false;
+    }
+  }, []);
+
+  // Disconnect from SSE
+  const disconnect = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
 
     setState((prev) => ({
@@ -424,9 +532,11 @@ export function useMqttZKTecoCommand() {
 
   // Auto-connect on mount
   useEffect(() => {
+    console.log("🚀 Initializing ZKTeco Command API connection...");
     connect();
 
     return () => {
+      console.log("🧹 Cleaning up ZKTeco Command API connection...");
       disconnect();
     };
   }, []);
@@ -440,5 +550,7 @@ export function useMqttZKTecoCommand() {
     deleteFingerprint,
     registerCard,
     deleteCard,
+    deletePalm,
+    deleteZKTecoUser,
   };
 }

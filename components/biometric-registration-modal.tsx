@@ -23,6 +23,7 @@ import {
   CheckCircle,
   Loader2,
   Hand,
+  Clock,
 } from "lucide-react";
 import { PalmRegistrationModal } from "./palm-registration-modal";
 import { FaceRegistrationModal } from "./face-registration-modal";
@@ -70,6 +71,9 @@ export function BiometricRegistrationModal({
   const [registrationStep, setRegistrationStep] = useState<
     "select" | "processing" | "complete"
   >("select");
+  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [remainingTime, setRemainingTime] = useState<number>(0);
+  const [countdownId, setCountdownId] = useState<NodeJS.Timeout | null>(null);
   const { state, registerFingerprint, registerCard } = useMqttZKTecoCommand();
 
   // Reset state when modal opens/closes
@@ -78,6 +82,17 @@ export function BiometricRegistrationModal({
       setRegistrationStep("select");
       setSelectedFinger(1);
       setIsProcessing(false);
+      setRemainingTime(0);
+
+      // Clear any existing timeouts
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        setTimeoutId(null);
+      }
+      if (countdownId) {
+        clearInterval(countdownId);
+        setCountdownId(null);
+      }
     }
   }, [isOpen]);
 
@@ -88,15 +103,39 @@ export function BiometricRegistrationModal({
         (type === "fingerprint" && state.lastResponse.Mode === "register_fp") ||
         (type === "card" && state.lastResponse.Mode === "register_card")
       ) {
+        // Clear timeouts
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          setTimeoutId(null);
+        }
+        if (countdownId) {
+          clearInterval(countdownId);
+          setCountdownId(null);
+        }
+
         setIsProcessing(false);
         setRegistrationStep("complete");
+        setRemainingTime(0);
+
+        // Show success message
+        Swal.fire({
+          title: "Registration Successful!",
+          text: `${
+            type === "card" ? "Card" : "Fingerprint"
+          } has been registered successfully.`,
+          icon: "success",
+          timer: 2000,
+          showConfirmButton: false,
+        });
+
+        // Auto close and trigger refresh
         setTimeout(() => {
           onComplete();
           handleClose();
-        }, 3000);
+        }, 2500);
       }
     }
-  }, [state.lastResponse, type, onComplete]);
+  }, [state.lastResponse, type, onComplete, timeoutId, countdownId]);
 
   // Use specialized modals for palm and face
   if (type === "palm") {
@@ -170,6 +209,20 @@ export function BiometricRegistrationModal({
     }
   };
 
+  const startCountdown = (seconds: number) => {
+    setRemainingTime(seconds);
+    const id = setInterval(() => {
+      setRemainingTime((prev) => {
+        if (prev <= 1) {
+          clearInterval(id);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    setCountdownId(id);
+  };
+
   const handleRegistration = async () => {
     if (!user?.zkteco_uid) {
       Swal.fire({
@@ -194,6 +247,7 @@ export function BiometricRegistrationModal({
 
     try {
       let success = false;
+      const timeoutDuration = 120000; // 2 minutes timeout
 
       if (type === "fingerprint") {
         success = registerFingerprint(user.zkteco_uid, selectedFinger);
@@ -215,6 +269,7 @@ export function BiometricRegistrationModal({
               </div>
               <p><strong>Finger:</strong> ${selectedFingerInfo?.label}</p>
               <p class="text-sm text-gray-600 mt-2">Please place your <strong>${selectedFingerInfo?.label.toLowerCase()}</strong> on the ZKTeco device scanner and follow the device instructions.</p>
+              <p class="text-xs text-gray-500 mt-2">You have 2 minutes to complete the registration.</p>
             </div>
           `,
           icon: "info",
@@ -226,7 +281,7 @@ export function BiometricRegistrationModal({
 
         Swal.fire({
           title: "Card Registration Started",
-          text: "Please tap your card on the ZKTeco device now.",
+          text: "Please tap your card on the ZKTeco device now. You have 2 minutes to complete the registration.",
           icon: "info",
           timer: 3000,
           showConfirmButton: false,
@@ -234,18 +289,31 @@ export function BiometricRegistrationModal({
       }
 
       if (success) {
+        // Start countdown
+        startCountdown(120); // 2 minutes
+
         // Set timeout to reset processing state if no response
-        setTimeout(() => {
+        const id = setTimeout(() => {
           if (registrationStep === "processing") {
             setIsProcessing(false);
             setRegistrationStep("select");
+            setRemainingTime(0);
+
+            if (countdownId) {
+              clearInterval(countdownId);
+              setCountdownId(null);
+            }
+
             Swal.fire({
               title: "Registration Timeout",
-              text: "No response from device. Please try again.",
+              text: "No response from device after 2 minutes. The registration may have completed successfully but wasn't detected due to network delays. Please check the device or try again.",
               icon: "warning",
+              confirmButtonText: "OK",
             });
           }
-        }, 30000); // 30 seconds timeout
+        }, timeoutDuration);
+
+        setTimeoutId(id);
       } else {
         setIsProcessing(false);
         setRegistrationStep("select");
@@ -268,15 +336,37 @@ export function BiometricRegistrationModal({
   };
 
   const handleClose = () => {
+    // Clear timeouts
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      setTimeoutId(null);
+    }
+    if (countdownId) {
+      clearInterval(countdownId);
+      setCountdownId(null);
+    }
+
     setIsProcessing(false);
     setRegistrationStep("select");
     setSelectedFinger(1);
+    setRemainingTime(0);
     onClose();
   };
 
   const handleBack = () => {
+    // Clear timeouts
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      setTimeoutId(null);
+    }
+    if (countdownId) {
+      clearInterval(countdownId);
+      setCountdownId(null);
+    }
+
     setIsProcessing(false);
     setRegistrationStep("select");
+    setRemainingTime(0);
   };
 
   if (!user || !type) return null;
@@ -396,6 +486,17 @@ export function BiometricRegistrationModal({
               </div>
             )}
 
+            {/* Countdown Timer */}
+            {registrationStep === "processing" && remainingTime > 0 && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                <span>
+                  Time remaining: {Math.floor(remainingTime / 60)}:
+                  {(remainingTime % 60).toString().padStart(2, "0")}
+                </span>
+              </div>
+            )}
+
             <p className="text-sm text-center text-muted-foreground">
               {getInstructions()}
             </p>
@@ -447,6 +548,13 @@ export function BiometricRegistrationModal({
                       Follow the instructions on the ZKTeco device to complete
                       registration.
                     </p>
+                    {remainingTime > 0 && (
+                      <p className="text-xs text-orange-600">
+                        Registration will timeout in{" "}
+                        {Math.floor(remainingTime / 60)}:
+                        {(remainingTime % 60).toString().padStart(2, "0")}
+                      </p>
+                    )}
                   </div>
                   <Button
                     onClick={handleBack}

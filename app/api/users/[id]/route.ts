@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import DatabaseService from "@/lib/database";
 import { FaceApiService } from "@/services/face-api.service";
-import { ZKTecoService } from "@/services/zkteco.service";
 
 // GET /api/users/[id] - Get user by ID
 export async function GET(
@@ -121,7 +120,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/users/[id] - Delete user
+// DELETE /api/users/[id] - Delete user and all biometric data
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -149,7 +148,8 @@ export async function DELETE(
 
     const deletionResults = {
       faceApi: { success: false, error: null as string | null },
-      zkteco: { success: false, error: null as string | null },
+      palm: { success: false, error: null as string | null },
+      zktecoMqtt: { success: false, error: null as string | null },
       local: { success: false, error: null as string | null },
     };
 
@@ -167,29 +167,75 @@ export async function DELETE(
             : "Unknown error";
       }
     } else {
-      deletionResults.faceApi.success = true; // No Face API ID to delete
+      deletionResults.faceApi.success = true;
     }
 
-    // Delete from ZKTeco device if user has zkteco_uid
-    if (existingUser.zkteco_uid) {
+    // Delete palm data if registered
+    if (existingUser.palm_registered) {
       try {
-        const zktecoService = ZKTecoService.getInstance();
-        const zktecoResult = await zktecoService.deleteUser(
-          existingUser.zkteco_uid
+        const palmResponse = await fetch(
+          `${
+            process.env.NEXTAUTH_URL || "http://localhost:3000"
+          }/api/palm/delete`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              command: "delete",
+              user_id: userId.toString(),
+            }),
+          }
         );
-        if (zktecoResult.success) {
-          deletionResults.zkteco.success = true;
+
+        const palmResult = await palmResponse.json();
+        if (palmResult.status === "ok") {
+          deletionResults.palm.success = true;
         } else {
-          deletionResults.zkteco.error = zktecoResult.error || "Unknown error";
-          console.error(`❌ ZKTeco deletion failed: ${zktecoResult.error}`);
+          deletionResults.palm.error =
+            palmResult.message || "Failed to delete palm data";
+          console.error(`❌ Palm deletion failed: ${palmResult.message}`);
         }
-      } catch (zktecoError) {
-        console.error("⚠️ ZKTeco deletion failed:", zktecoError);
-        deletionResults.zkteco.error =
-          zktecoError instanceof Error ? zktecoError.message : "Unknown error";
+      } catch (palmError) {
+        console.error("⚠️ Palm deletion failed:", palmError);
+        deletionResults.palm.error =
+          palmError instanceof Error ? palmError.message : "Unknown error";
       }
     } else {
-      deletionResults.zkteco.success = true; // No ZKTeco UID to delete
+      deletionResults.palm.success = true;
+    }
+
+    // Delete from ZKTeco device via MQTT if user has zkteco_uid
+    if (existingUser.zkteco_uid) {
+      try {
+        // Send MQTT command to delete user from ZKTeco device
+        const mqttResponse = await fetch(
+          `${
+            process.env.NEXTAUTH_URL || "http://localhost:3000"
+          }/api/mqtt/zkteco-command`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              command: `mode;delete_user;${existingUser.zkteco_uid}`,
+            }),
+          }
+        );
+
+        const mqttResult = await mqttResponse.json();
+        if (mqttResult.success) {
+          deletionResults.zktecoMqtt.success = true;
+        } else {
+          deletionResults.zktecoMqtt.error =
+            mqttResult.error || "Failed to send MQTT delete command";
+          console.error(`❌ MQTT delete command failed: ${mqttResult.error}`);
+        }
+      } catch (mqttError) {
+        console.error("⚠️ ZKTeco MQTT deletion failed:", mqttError);
+        deletionResults.zktecoMqtt.error =
+          mqttError instanceof Error ? mqttError.message : "Unknown error";
+      }
+    } else {
+      deletionResults.zktecoMqtt.success = true;
     }
 
     const deleted = db.deleteUser(userId);
@@ -203,7 +249,7 @@ export async function DELETE(
     if (deletionResults.local.success) {
       return NextResponse.json({
         success: true,
-        message: "User deletion completed",
+        message: "User and all biometric data deletion completed",
         results: deletionResults,
         details: {
           faceApi: deletionResults.faceApi.success
@@ -211,11 +257,16 @@ export async function DELETE(
               ? "Deleted from Face API"
               : "No Face API ID to delete"
             : `Face API error: ${deletionResults.faceApi.error}`,
-          zkteco: deletionResults.zkteco.success
+          palm: deletionResults.palm.success
+            ? existingUser.palm_registered
+              ? "Deleted palm data"
+              : "No palm data to delete"
+            : `Palm error: ${deletionResults.palm.error}`,
+          zktecoMqtt: deletionResults.zktecoMqtt.success
             ? existingUser.zkteco_uid
-              ? "Deleted from ZKTeco device"
+              ? "MQTT delete command sent to ZKTeco device"
               : "No ZKTeco UID to delete"
-            : `ZKTeco error: ${deletionResults.zkteco.error}`,
+            : `ZKTeco MQTT error: ${deletionResults.zktecoMqtt.error}`,
           local: "Deleted from local database",
         },
       });
