@@ -184,6 +184,8 @@ export default function Portfolio() {
     { name: "HMI", icon: Server, level: 75, color: "text-indigo-600" },
     { name: "Measuring Electrical Tools", icon: Ruler, level: 70, color: "text-teal-600" },
     { name: "Hardware", icon: HardDrive, level: 80, color: "text-slate-600" },
+    { name: "Technical Drawing", icon: Wrench, level: 85, color: "text-orange-600" },
+    { name: "Wiring", icon: Zap, level: 80, color: "text-purple-600" },
     { name: "Excel", icon: FileText, level: 85, color: "text-green-600" },
     { name: "PowerPoint", icon: FileText, level: 80, color: "text-red-600" },
     { name: "Google Docs", icon: FileText, level: 85, color: "text-blue-500" },
