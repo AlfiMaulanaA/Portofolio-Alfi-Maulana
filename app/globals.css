@@ -80,9 +80,134 @@
 @layer base {
   * {
     @apply border-border;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
   }
   body {
     @apply bg-background text-foreground;
+    transition: none;
+  }
+
+  /* Enhanced dark mode typography */
+  .dark h1,
+  .dark h2,
+  .dark h3,
+  .dark h4,
+  .dark h5,
+  .dark h6 {
+    @apply text-foreground;
+  }
+
+  /* Better contrast for dark mode text */
+  .dark .text-muted-foreground {
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Dark mode specific card styles */
+  .dark .card-dark {
+    @apply bg-card border-border;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
+  .dark .card-dark:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+
+  /* Enhanced form elements in dark mode */
+  .dark input,
+  .dark textarea,
+  .dark select {
+    @apply bg-input border-border text-foreground;
+  }
+
+  .dark input:focus,
+  .dark textarea:focus,
+  .dark select:focus {
+    @apply ring-ring ring-offset-background;
+  }
+
+  /* Button enhancements for dark mode */
+  .dark .btn-dark {
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 border border-primary/20;
+  }
+
+  .dark .btn-dark:hover {
+    box-shadow: 0 0 0 2px hsl(var(--ring));
+  }
+
+  /* Sidebar specific dark mode enhancements */
+  .dark .sidebar-dark {
+    @apply bg-sidebar border-sidebar-border;
+    backdrop-filter: blur(8px);
+  }
+
+  /* Modal and overlay improvements for dark mode */
+  .dark .modal-dark {
+    @apply bg-background text-foreground border-border;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Loading states */
+  .dark .loading-dark {
+    background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted-foreground)) 37%, hsl(var(--muted)) 63%);
+    background-size: 400% 100%;
+    animation: loading-dark 1.4s ease-in-out infinite;
+  }
+
+  @keyframes loading-dark {
+    0% {
+      background-position: 100% 0;
+    }
+    100% {
+      background-position: -100% 0;
+    }
+  }
+
+  /* Enhanced hover states */
+  .dark .hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .dark .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px -8px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Better scrollbar for dark mode */
+  .dark .scroll-custom::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .dark .scroll-custom::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 3px;
+  }
+
+  .dark .scroll-custom::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground));
+    border-radius: 3px;
+  }
+
+  .dark .scroll-custom::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--ring));
+  }
+
+  /* Focus states for accessibility */
+  .dark *:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* Custom utility classes for dark mode gradients */
+  .dark .gradient-text {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-1)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .dark .gradient-bg {
+    background: linear-gradient(135deg, hsl(var(--background)), hsl(var(--muted)));
   }
 }
 
