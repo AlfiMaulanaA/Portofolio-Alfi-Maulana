@@ -224,6 +224,12 @@ export default function Portfolio() {
       pdf: "#",
       courseraLink: "https://coursera.org/share/2fa261f01fdc698d3a269a8fb4b8a00f",
     },
+    {
+      title: "Other Certificate",
+      image: "/placeholder.jpg",
+      pdf: "#",
+      courseraLink: "#",
+    },
   ];
 
   const projects = [
@@ -690,7 +696,7 @@ export default function Portfolio() {
                   Professional Experience
                 </h4>
                 <div className="space-y-3 text-muted-foreground">
-                  <div>• PT Graha Sumber Prima Elektronik (2024-Present)</div>
+                  <div>• PT Graha Sumber Prima Elektronik (2022-Present)</div>
                   <div className="ml-4 text-sm">IoT Engineer & Software Developer - Commercial IoT solutions & web apps</div>
                   <div>• PT Gajah Tunggal (Internship)</div>
                   <div className="ml-4 text-sm">Warehouse Operations - Logistics & administrative processes</div>
@@ -1424,7 +1430,7 @@ export default function Portfolio() {
               className="text-muted-foreground mb-4"
               whileHover={{ scale: 1.02 }}
             >
-              © 2024 Portfolio. Built with{" "}
+              © 2025 Portfolio. Built with{" "}
               <motion.span
                 className="text-blue-400 font-semibold"
                 whileHover={{ color: "#a855f7" }}
