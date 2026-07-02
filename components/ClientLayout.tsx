@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { ThemeProvider } from "next-themes";
 
 export default function ClientLayout({
   children,
@@ -8,8 +9,10 @@ export default function ClientLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {children}
-    </div>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <div className="min-h-screen bg-background text-foreground">
+        {children}
+      </div>
+    </ThemeProvider>
   );
 }

@@ -1,20 +1,12 @@
- const skills = [
-    { name: "React", level: 90 },
-    { name: "React Natice", level: 80 },
-    { name: "Next.js", level: 85 },
-    { name: "Vue.js", level: 90 },
-    { name: "JavaScript", level: 85 },
-    { name: "TypeScript", level: 80 },
-    { name: "Node.js", level: 75 },
-    { name: "Python", level: 85 },
-    { name: "C#", level: 80 },
-    { name: "C", level: 80 },
-    { name: "C++", level: 80 },
-    { name: "Dart", level: 70 },
-    { name: ".NET", level: 85 },
-    { name: "PLC Programming", level: 75 },
-    { name: "Tailwind CSS", level: 90 },
-    { name: "PostgreSQL", level: 70 },
-    { name: "AWS", level: 65 },
-    { name: "Networking", level: 75 },
-  ];
+QuickBom (TypeScript)
+KiniBusApps (Java)
+RentCarApps-Java
+Palm-Containment (TypeScript)
+NewContainment (TypeScript)
+zigbee2mqtt.io (TypeScript)
+ESP32-MicroStation-Box (C)
+SecurityDoorPYZK (Vue)
+motor_payment_app (PHP)
+E-Attendace (Vue)
+SavvySavver (Web App for money management)
+WarehouseSystem (CSS)

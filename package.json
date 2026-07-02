@@ -30,6 +30,7 @@
     "typescript": "^5"
   },
   "devDependencies": {
+    "@next/swc-linux-x64-gnu": "^14.0.0",
     "eslint": "^8",
     "eslint-config-next": "14.0.0"
   }
