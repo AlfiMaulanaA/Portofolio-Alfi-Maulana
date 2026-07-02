@@ -342,15 +342,15 @@ function SectionHeading({
   description?: string;
 }) {
   return (
-    <div className="mb-10 max-w-3xl">
-      <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+    <div className="mb-6 max-w-3xl sm:mb-8 lg:mb-10">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300 sm:mb-3 sm:text-sm">
         {eyebrow}
       </p>
-      <h2 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-white md:text-4xl">
+      <h2 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-3xl md:text-4xl">
         {title}
       </h2>
       {description ? (
-        <p className="mt-4 text-base leading-7 text-zinc-600 dark:text-zinc-300">
+        <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300 sm:mt-4 sm:text-base sm:leading-7">
           {description}
         </p>
       ) : null}
@@ -360,8 +360,8 @@ function SectionHeading({
 
 function LoadingScreen() {
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
-      <div className="mx-auto flex min-h-screen max-w-7xl items-center px-4 sm:px-6 lg:px-8">
+    <main className="min-h-[100dvh] bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+      <div className="mx-auto flex min-h-[100dvh] max-w-7xl items-center px-4 sm:px-6 lg:px-8">
         <div className="w-full max-w-xl">
           <div className="mb-8 flex items-center gap-3">
             <span className="flex h-12 w-12 animate-pulse items-center justify-center rounded-md bg-zinc-950 text-sm font-semibold text-white dark:bg-white dark:text-zinc-950">
@@ -417,13 +417,15 @@ function AnimatedSection({
       return;
     }
 
+    const isMobile = window.innerWidth < 768;
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         setIsVisible(entry.isIntersecting);
       },
       {
-        threshold: 0.18,
-        rootMargin: "-8% 0px -10% 0px",
+        threshold: isMobile ? 0.05 : 0.15,
+        rootMargin: isMobile ? "0px 0px -4% 0px" : "-6% 0px -8% 0px",
       }
     );
 
@@ -436,8 +438,8 @@ function AnimatedSection({
     <section
       id={id}
       ref={ref}
-      className={`${className ?? ""} transform-gpu transition-all duration-700 ease-out motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:opacity-100 motion-reduce:blur-0 ${
-        isVisible ? "translate-y-0 scale-100 opacity-100 blur-0" : "translate-y-8 scale-[0.985] opacity-0 blur-[2px]"
+      className={`${className ?? ""} transform-gpu transition-all duration-500 ease-out motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:opacity-100 motion-reduce:blur-0 ${
+        isVisible ? "translate-y-0 scale-100 opacity-100 blur-0" : "translate-y-4 scale-[0.99] opacity-0 blur-[1px] sm:translate-y-8 sm:scale-[0.985] sm:blur-[2px]"
       }`}
     >
       {children}
@@ -529,7 +531,7 @@ export default function Portfolio() {
   const activeContributionDays = githubData?.contributions.calendar.filter((day) => day.count > 0) ?? [];
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-950 antialiased dark:bg-zinc-950 dark:text-zinc-50">
+    <main className="min-h-[100dvh] bg-zinc-50 text-zinc-950 antialiased dark:bg-zinc-950 dark:text-zinc-50">
       <header className="sticky top-0 z-50 border-b border-zinc-200/80 bg-zinc-50/92 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/92">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <a href="#" className="group flex items-center gap-3" aria-label="Back to top">
@@ -600,19 +602,19 @@ export default function Portfolio() {
       </header>
 
       <AnimatedSection className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 md:py-20 lg:grid-cols-[1.02fr_0.98fr] lg:px-8 lg:py-24">
+        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:gap-10 sm:px-6 sm:py-16 md:py-20 lg:grid-cols-[1.02fr_0.98fr] lg:px-8 lg:py-24">
           <div className="flex flex-col justify-center">
-            <Badge className="mb-6 w-fit rounded-md bg-emerald-50 px-3 py-1 text-emerald-800 hover:bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-200">
+            <Badge className="mb-4 w-fit rounded-md bg-emerald-50 px-2.5 py-0.5 text-xs text-emerald-800 hover:bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-200 sm:mb-6 sm:px-3 sm:py-1 sm:text-sm">
               Available for IoT, automation, and full-stack projects
             </Badge>
-            <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-zinc-950 dark:text-white md:text-6xl">
+            <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-4xl md:text-6xl">
               Alfi Maulana Al-Farisi
             </h1>
-            <p className="mt-5 max-w-2xl text-xl leading-8 text-zinc-700 dark:text-zinc-300">
+            <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-700 dark:text-zinc-300 sm:mt-5 sm:text-xl sm:leading-8">
               IoT Engineer and Software Developer building practical systems that connect hardware,
               software, and operational workflows.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-6 flex flex-col gap-2.5 sm:mt-8 sm:flex-row sm:gap-3">
               <Button asChild size="lg" className="rounded-md">
                 <a href="mailto:alfimaulana2003@gmail.com">
                   <Mail className="mr-2 h-4 w-4" />
@@ -648,11 +650,11 @@ export default function Portfolio() {
                   className="aspect-[4/3] w-full object-cover"
                 />
               </button>
-              <div className="grid gap-4 border-t border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 border-t border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:grid-cols-3 sm:gap-4 sm:p-5">
                 {metrics.map((metric) => (
                   <div key={metric.label}>
-                    <div className="text-2xl font-semibold text-zinc-950 dark:text-white">{metric.value}</div>
-                    <div className="mt-1 text-sm leading-5 text-zinc-500 dark:text-zinc-400">{metric.label}</div>
+                    <div className="text-xl font-semibold text-zinc-950 dark:text-white sm:text-2xl">{metric.value}</div>
+                    <div className="mt-0.5 text-xs leading-5 text-zinc-500 dark:text-zinc-400 sm:mt-1 sm:text-sm">{metric.label}</div>
                   </div>
                 ))}
               </div>
@@ -662,7 +664,7 @@ export default function Portfolio() {
       </AnimatedSection>
 
       <AnimatedSection id="github" className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
           <SectionHeading
             eyebrow="GitHub Live Data"
             title="Profile, repositories, and contribution activity from GitHub GraphQL."
@@ -676,48 +678,48 @@ export default function Portfolio() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+            <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
               <Card className="rounded-lg border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex items-center gap-3 sm:gap-4">
                     {githubData?.profile.avatar ? (
                       <img
                         src={githubData.profile.avatar}
                         alt={`${githubData.profile.username} avatar`}
-                        className="h-16 w-16 rounded-full border border-zinc-200 dark:border-zinc-700"
+                        className="h-12 w-12 rounded-full border border-zinc-200 dark:border-zinc-700 sm:h-16 sm:w-16"
                       />
                     ) : (
-                      <div className="h-16 w-16 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+                      <div className="h-12 w-12 rounded-full bg-zinc-200 dark:bg-zinc-800 sm:h-16 sm:w-16" />
                     )}
-                    <div>
-                      <h3 className="text-xl font-semibold text-zinc-950 dark:text-white">
+                    <div className="min-w-0">
+                      <h3 className="text-lg font-semibold text-zinc-950 dark:text-white sm:text-xl">
                         {githubData?.profile.name ?? "Loading GitHub profile"}
                       </h3>
                       <a
                         href={githubData?.profile.url ?? "https://github.com/AlfiMaulanaA"}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-1 inline-flex items-center gap-2 text-sm font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+                        className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-300 sm:mt-1 sm:gap-2 sm:text-sm"
                       >
-                        <Github className="h-4 w-4" />
+                        <Github className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         @{githubData?.profile.username ?? "AlfiMaulanaA"}
                       </a>
                     </div>
                   </div>
 
-                  <p className="mt-5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                  <p className="mt-4 text-xs leading-5 text-zinc-600 dark:text-zinc-300 sm:mt-5 sm:text-sm sm:leading-6">
                     {githubData?.profile.bio ?? "Mengambil bio dari GitHub..."}
                   </p>
 
-                  <div className="mt-5 space-y-3 text-sm text-zinc-600 dark:text-zinc-300">
+                  <div className="mt-4 space-y-2 text-xs text-zinc-600 dark:text-zinc-300 sm:mt-5 sm:space-y-3 sm:text-sm">
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-zinc-400" />
+                      <MapPin className="h-3.5 w-3.5 text-zinc-400 sm:h-4 sm:w-4" />
                       {githubData?.profile.location ?? "Location not set"}
                     </div>
                     <div className="flex items-center gap-2">
-                      <ExternalLink className="h-4 w-4 text-zinc-400" />
+                      <ExternalLink className="h-3.5 w-3.5 text-zinc-400 sm:h-4 sm:w-4" />
                       {githubData?.profile.website ? (
-                        <a href={githubData.profile.website} target="_blank" rel="noreferrer" className="hover:underline">
+                        <a href={githubData.profile.website} target="_blank" rel="noreferrer" className="truncate hover:underline">
                           {githubData.profile.website}
                         </a>
                       ) : (
@@ -728,8 +730,8 @@ export default function Portfolio() {
                 </CardContent>
               </Card>
 
-              <div className="grid gap-6">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="grid gap-4 sm:gap-6">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-5">
                   {[
                     ["Total", githubData?.contributions.total, `${githubData?.contributions.year ?? 2026} contributions`],
                     ["Commits", githubData?.contributions.commits, "commit contributions"],
@@ -738,39 +740,39 @@ export default function Portfolio() {
                     ["Reviews", githubData?.contributions.reviews, "PR reviews"],
                   ].map(([label, value, caption]) => (
                     <Card key={label as string} className="rounded-lg border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                      <CardContent className="p-4">
-                        <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{label}</p>
-                        <p className="mt-2 text-3xl font-semibold text-zinc-950 dark:text-white">
+                      <CardContent className="p-3 sm:p-4">
+                        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 sm:text-sm">{label}</p>
+                        <p className="mt-1.5 text-2xl font-semibold text-zinc-950 dark:text-white sm:mt-2 sm:text-3xl">
                           {githubLoading ? "-" : value ?? 0}
                         </p>
-                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{caption}</p>
+                        <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400 sm:mt-1 sm:text-xs">{caption}</p>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
 
                 <Card className="rounded-lg border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                  <CardContent className="p-5">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <CardContent className="p-3 sm:p-5">
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                       <div>
-                        <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Contribution Calendar</h3>
-                        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                        <h3 className="text-base font-semibold text-zinc-950 dark:text-white sm:text-lg">Contribution Calendar</h3>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 sm:text-sm">
                           {activeContributionDays.length} active days in {githubData?.contributions.year ?? 2026}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 sm:gap-2 sm:text-xs">
                         <span>Less</span>
-                        <span className="h-3 w-3 rounded-sm bg-zinc-100 dark:bg-zinc-800" />
-                        <span className="h-3 w-3 rounded-sm bg-emerald-200 dark:bg-emerald-800" />
-                        <span className="h-3 w-3 rounded-sm bg-emerald-400 dark:bg-emerald-600" />
-                        <span className="h-3 w-3 rounded-sm bg-emerald-600 dark:bg-emerald-400" />
-                        <span className="h-3 w-3 rounded-sm bg-emerald-700 dark:bg-emerald-300" />
+                        <span className="h-2.5 w-2.5 rounded-[2px] bg-zinc-100 dark:bg-zinc-800 sm:h-3 sm:w-3 sm:rounded-sm" />
+                        <span className="h-2.5 w-2.5 rounded-[2px] bg-emerald-200 dark:bg-emerald-800 sm:h-3 sm:w-3 sm:rounded-sm" />
+                        <span className="h-2.5 w-2.5 rounded-[2px] bg-emerald-400 dark:bg-emerald-600 sm:h-3 sm:w-3 sm:rounded-sm" />
+                        <span className="h-2.5 w-2.5 rounded-[2px] bg-emerald-600 dark:bg-emerald-400 sm:h-3 sm:w-3 sm:rounded-sm" />
+                        <span className="h-2.5 w-2.5 rounded-[2px] bg-emerald-700 dark:bg-emerald-300 sm:h-3 sm:w-3 sm:rounded-sm" />
                         <span>More</span>
                       </div>
                     </div>
 
-                    <div className="mt-5 overflow-x-auto pb-2">
-                      <div className="grid min-w-[720px] grid-flow-col grid-rows-7 gap-1">
+                    <div className="mt-3 overflow-x-auto pb-2 sm:mt-5">
+                      <div className="grid min-w-[420px] grid-flow-col grid-rows-7 gap-[2px] sm:min-w-[720px] sm:gap-1">
                         {(githubData?.contributions.calendar ?? Array.from({ length: 365 })).map((day, index) => {
                           const contributionDay = day as ContributionDay | undefined;
                           return (
@@ -781,7 +783,7 @@ export default function Portfolio() {
                                   ? `${contributionDay.date}: ${contributionDay.count} contributions`
                                   : "Loading"
                               }
-                              className={`h-3 w-3 rounded-sm ${contributionLevelClass(contributionDay?.level ?? "NONE")}`}
+                              className={`h-2 w-2 rounded-[2px] sm:h-3 sm:w-3 sm:rounded-sm ${contributionLevelClass(contributionDay?.level ?? "NONE")}`}
                             />
                           );
                         })}
@@ -789,9 +791,9 @@ export default function Portfolio() {
                     </div>
 
                     {activeContributionDays.length > 0 ? (
-                      <div className="mt-5 flex flex-wrap gap-2">
-                        {activeContributionDays.slice(0, 12).map((day) => (
-                          <Badge key={day.date} variant="outline" className="rounded-md border-zinc-300 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950">
+                      <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-5 sm:gap-2">
+                        {activeContributionDays.slice(0, 8).map((day) => (
+                          <Badge key={day.date} variant="outline" className="rounded-md border-zinc-300 bg-zinc-50 text-[10px] dark:border-zinc-700 dark:bg-zinc-950 sm:text-xs">
                             {day.date}: {day.count}
                           </Badge>
                         ))}
@@ -805,7 +807,7 @@ export default function Portfolio() {
         </div>
       </AnimatedSection>
 
-      <AnimatedSection id="work" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+      <AnimatedSection id="work" className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
         <div>
           <SectionHeading
             eyebrow="Selected Work"
@@ -829,24 +831,24 @@ export default function Portfolio() {
                     className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                   />
                 </button>
-                <CardContent className="p-5">
-                  <div className="mb-3 flex items-start justify-between gap-3">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="mb-2 flex items-start justify-between gap-2 sm:mb-3 sm:gap-3">
                     <div>
-                      <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">{work.type}</p>
-                      <h3 className="mt-1 text-xl font-semibold text-zinc-950 dark:text-white">{work.title}</h3>
+                      <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300 sm:text-sm">{work.type}</p>
+                      <h3 className="mt-0.5 text-base font-semibold text-zinc-950 dark:text-white sm:mt-1 sm:text-xl">{work.title}</h3>
                     </div>
                     <a
                       href={work.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded-md border border-zinc-200 p-2 text-zinc-600 transition hover:border-zinc-950 hover:text-zinc-950 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-white dark:hover:text-white"
+                      className="rounded-md border border-zinc-200 p-1.5 text-zinc-600 transition hover:border-zinc-950 hover:text-zinc-950 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-white dark:hover:text-white sm:p-2"
                       aria-label={`Open ${work.title}`}
                     >
                       <ArrowUpRight className="h-4 w-4" />
                     </a>
                   </div>
-                  <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">{work.description}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <p className="text-xs leading-5 text-zinc-600 dark:text-zinc-300 sm:text-sm sm:leading-6">{work.description}</p>
+                  <div className="mt-3 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
                     {work.tags.map((tag) => (
                       <Badge key={tag} variant="secondary" className="rounded-md">
                         {tag}
@@ -861,24 +863,24 @@ export default function Portfolio() {
       </AnimatedSection>
 
       <AnimatedSection id="capabilities" className="border-y border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
           <div>
             <SectionHeading
               eyebrow="Capabilities"
               title="A practical mix of hardware, software, and field delivery."
               description="The page now explains what Alfi can do in business terms, then supports it with concrete technical scope."
             />
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-4">
               {capabilities.map((capability) => (
                 <Card key={capability.title} className="rounded-lg border-zinc-200 bg-zinc-50 shadow-none dark:border-zinc-800 dark:bg-zinc-900">
-                  <CardContent className="p-6">
-                    <capability.icon className="h-8 w-8 text-emerald-700 dark:text-emerald-300" />
-                    <h3 className="mt-5 text-lg font-semibold text-zinc-950 dark:text-white">{capability.title}</h3>
-                    <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{capability.description}</p>
-                    <ul className="mt-5 space-y-3">
+                  <CardContent className="p-4 sm:p-6">
+                    <capability.icon className="h-7 w-7 text-emerald-700 dark:text-emerald-300 sm:h-8 sm:w-8" />
+                    <h3 className="mt-4 text-base font-semibold text-zinc-950 dark:text-white sm:mt-5 sm:text-lg">{capability.title}</h3>
+                    <p className="mt-2 text-xs leading-5 text-zinc-600 dark:text-zinc-300 sm:mt-3 sm:text-sm sm:leading-6">{capability.description}</p>
+                    <ul className="mt-3 space-y-2 sm:mt-5 sm:space-y-3">
                       {capability.points.map((point) => (
-                        <li key={point} className="flex gap-2 text-sm text-zinc-700 dark:text-zinc-200">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-300" />
+                        <li key={point} className="flex gap-1.5 text-xs text-zinc-700 dark:text-zinc-200 sm:gap-2 sm:text-sm">
+                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300 sm:h-4 sm:w-4" />
                           {point}
                         </li>
                       ))}
@@ -891,21 +893,21 @@ export default function Portfolio() {
         </div>
       </AnimatedSection>
 
-      <AnimatedSection id="experience" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+      <AnimatedSection id="experience" className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
         <div>
           <SectionHeading
             eyebrow="Experience"
             title="Engineering profile grounded in automation and product delivery."
           />
-          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid gap-6 sm:gap-8 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-4">
               {experiences.map((item) => (
                 <Card key={`${item.role}-${item.company}`} className="rounded-lg border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <CardContent className="p-4 sm:p-6">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                       <div>
-                        <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">{item.role}</h3>
-                        <p className="mt-1 flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-300">
+                        <h3 className="text-base font-semibold text-zinc-950 dark:text-white sm:text-lg">{item.role}</h3>
+                        <p className="mt-1 flex items-center gap-2 text-xs font-medium text-zinc-600 dark:text-zinc-300 sm:text-sm">
                           <Building2 className="h-4 w-4" />
                           {item.company}
                         </p>
@@ -915,33 +917,33 @@ export default function Portfolio() {
                         {item.period}
                       </Badge>
                     </div>
-                    <p className="mt-4 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.description}</p>
+                    <p className="mt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300 sm:mt-4 sm:text-sm sm:leading-6">{item.description}</p>
                   </CardContent>
                 </Card>
               ))}
             </div>
 
             <Card className="rounded-lg border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3">
-                  <GraduationCap className="h-7 w-7 text-emerald-700 dark:text-emerald-300" />
-                  <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Education</h3>
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <GraduationCap className="h-6 w-6 text-emerald-700 dark:text-emerald-300 sm:h-7 sm:w-7" />
+                  <h3 className="text-base font-semibold text-zinc-950 dark:text-white sm:text-lg">Education</h3>
                 </div>
-                <div className="mt-6 space-y-6">
+                <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
                   {education.map((item) => (
-                    <div key={item.school} className="border-l border-zinc-200 pl-5 dark:border-zinc-700">
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">{item.period}</p>
-                      <h4 className="mt-1 font-semibold text-zinc-950 dark:text-white">{item.school}</h4>
-                      <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.focus}</p>
+                    <div key={item.school} className="border-l border-zinc-200 pl-4 dark:border-zinc-700 sm:pl-5">
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 sm:text-sm">{item.period}</p>
+                      <h4 className="mt-0.5 text-sm font-semibold text-zinc-950 dark:text-white sm:mt-1 sm:text-base">{item.school}</h4>
+                      <p className="mt-1.5 text-xs leading-5 text-zinc-600 dark:text-zinc-300 sm:mt-2 sm:text-sm sm:leading-6">{item.focus}</p>
                     </div>
                   ))}
                 </div>
-                <div className="mt-8 rounded-lg border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-950">
-                  <div className="flex items-center gap-3">
-                    <Award className="h-6 w-6 text-emerald-700 dark:text-emerald-300" />
-                    <h3 className="font-semibold text-zinc-950 dark:text-white">Leadership</h3>
+                <div className="mt-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:mt-8 sm:p-5">
+                  <div className="flex items-center gap-2.5 sm:gap-3">
+                    <Award className="h-5 w-5 text-emerald-700 dark:text-emerald-300 sm:h-6 sm:w-6" />
+                    <h3 className="text-sm font-semibold text-zinc-950 dark:text-white sm:text-base">Leadership</h3>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+                  <p className="mt-2 text-xs leading-5 text-zinc-600 dark:text-zinc-300 sm:mt-3 sm:text-sm sm:leading-6">
                     Karate-DO Head Coach, Karang Taruna public relations, class representative council creative team, and student council experience.
                   </p>
                 </div>
@@ -952,24 +954,24 @@ export default function Portfolio() {
       </AnimatedSection>
 
       <AnimatedSection id="skills" className="border-y border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
           <div>
             <SectionHeading
               eyebrow="Skills"
               title="Technical depth with a clear engineering support layer."
             />
-            <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
-              <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-6 sm:gap-8 lg:grid-cols-[1fr_360px]">
+              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
                 {technicalSkills.map((skill) => (
-                  <div key={skill.name} className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <skill.icon className="h-6 w-6 text-zinc-800 dark:text-zinc-100" />
-                        <span className="font-medium text-zinc-950 dark:text-white">{skill.name}</span>
+                  <div key={skill.name} className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900 sm:p-4">
+                    <div className="flex items-center justify-between gap-2 sm:gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <skill.icon className="h-5 w-5 text-zinc-800 dark:text-zinc-100 sm:h-6 sm:w-6" />
+                        <span className="text-sm font-medium text-zinc-950 dark:text-white sm:text-base">{skill.name}</span>
                       </div>
-                      <span className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">{skill.value}%</span>
+                      <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 sm:text-sm">{skill.value}%</span>
                     </div>
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800 sm:mt-3 sm:h-2">
                       <div className="h-full rounded-full bg-emerald-700 dark:bg-emerald-400" style={{ width: `${skill.value}%` }} />
                     </div>
                   </div>
@@ -977,14 +979,14 @@ export default function Portfolio() {
               </div>
 
               <Card className="rounded-lg border-zinc-200 bg-zinc-50 shadow-none dark:border-zinc-800 dark:bg-zinc-900">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3">
-                    <Network className="h-7 w-7 text-emerald-700 dark:text-emerald-300" />
-                    <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Engineering & Tools</h3>
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex items-center gap-2.5 sm:gap-3">
+                    <Network className="h-6 w-6 text-emerald-700 dark:text-emerald-300 sm:h-7 sm:w-7" />
+                    <h3 className="text-base font-semibold text-zinc-950 dark:text-white sm:text-lg">Engineering & Tools</h3>
                   </div>
-                  <div className="mt-5 flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-1.5 sm:mt-5 sm:gap-2">
                     {engineeringSkills.map((skill) => (
-                      <Badge key={skill} variant="outline" className="rounded-md border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-950">
+                      <Badge key={skill} variant="outline" className="rounded-md border-zinc-300 bg-white text-[11px] dark:border-zinc-700 dark:bg-zinc-950 sm:text-xs">
                         {skill}
                       </Badge>
                     ))}
@@ -996,7 +998,7 @@ export default function Portfolio() {
         </div>
       </AnimatedSection>
 
-      <AnimatedSection id="certificates" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+      <AnimatedSection id="certificates" className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
         <div>
           <SectionHeading
             eyebrow="Certificates"
@@ -1016,10 +1018,10 @@ export default function Portfolio() {
                     className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                   />
                 </button>
-                <CardContent className="p-5">
-                  <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">{certificate.issuer}</p>
-                  <h3 className="mt-1 text-lg font-semibold text-zinc-950 dark:text-white">{certificate.title}</h3>
-                  <Button asChild variant="outline" size="sm" className="mt-5 rounded-md">
+                <CardContent className="p-4 sm:p-5">
+                  <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 sm:text-sm">{certificate.issuer}</p>
+                  <h3 className="mt-1 text-base font-semibold text-zinc-950 dark:text-white sm:text-lg">{certificate.title}</h3>
+                  <Button asChild variant="outline" size="sm" className="mt-4 rounded-md sm:mt-5">
                     <a href={certificate.href} target="_blank" rel="noreferrer">
                       View Credential
                       <ExternalLink className="ml-2 h-4 w-4" />
@@ -1033,38 +1035,38 @@ export default function Portfolio() {
       </AnimatedSection>
 
       <AnimatedSection className="border-y border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
           <div>
             <SectionHeading
               eyebrow="Repositories"
               title="Additional code work across web, IoT, and application development."
             />
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 md:gap-3 lg:grid-cols-3">
               {githubRepositories.map((repo) => (
                 <a
                   key={repo.name}
                   href={repo.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 transition hover:border-zinc-950 hover:bg-white dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-white dark:hover:bg-zinc-950"
+                  className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 transition hover:border-zinc-950 hover:bg-white dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-white dark:hover:bg-zinc-950 sm:p-4"
                 >
-                  <span className="flex items-start justify-between gap-4">
-                    <span>
-                      <span className="block font-medium text-zinc-950 dark:text-white">{repo.name}</span>
-                      <span className="mt-1 block text-sm text-zinc-500 dark:text-zinc-400">
+                  <span className="flex items-start justify-between gap-3 sm:gap-4">
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-zinc-950 dark:text-white sm:text-base">{repo.name}</span>
+                      <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400 sm:mt-1 sm:text-sm">
                         {repo.description || "No repository description"}
                       </span>
                     </span>
-                    <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-zinc-500" />
+                    <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-500 sm:mt-1 sm:h-4 sm:w-4" />
                   </span>
-                  <span className="mt-4 flex flex-wrap items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-                    <span className="rounded-md bg-white px-2 py-1 dark:bg-zinc-950">{repo.language}</span>
+                  <span className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400 sm:mt-4 sm:gap-3 sm:text-xs">
+                    <span className="rounded-md bg-white px-1.5 py-0.5 dark:bg-zinc-950 sm:px-2 sm:py-1">{repo.language}</span>
                     <span className="inline-flex items-center gap-1">
-                      <Star className="h-3.5 w-3.5" />
+                      <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       {repo.stars}
                     </span>
                     <span className="inline-flex items-center gap-1">
-                      <GitFork className="h-3.5 w-3.5" />
+                      <GitFork className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       {repo.forks}
                     </span>
                   </span>
@@ -1075,22 +1077,22 @@ export default function Portfolio() {
         </div>
       </AnimatedSection>
 
-      <AnimatedSection id="contact" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="grid gap-8 rounded-xl border border-zinc-200 bg-zinc-950 p-6 text-white shadow-sm dark:border-zinc-800 md:grid-cols-[1fr_auto] md:p-8 lg:p-10">
+      <AnimatedSection id="contact" className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
+        <div className="grid gap-6 rounded-xl border border-zinc-200 bg-zinc-950 p-4 text-white shadow-sm dark:border-zinc-800 sm:gap-8 sm:p-6 md:grid-cols-[1fr_auto] md:p-8 lg:p-10">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">Contact</p>
-            <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 sm:text-sm">Contact</p>
+            <h2 className="mt-2 max-w-2xl text-2xl font-semibold tracking-tight sm:mt-3 sm:text-3xl md:text-4xl">
               Need an engineer who can connect software with real equipment?
             </h2>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-300">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-300 sm:mt-4 sm:text-base sm:leading-7">
               Discuss IoT systems, automation projects, dashboards, full-stack applications, or technical implementation support.
             </p>
           </div>
-          <div className="flex min-w-64 flex-col justify-center gap-3">
+          <div className="flex flex-col justify-center gap-2.5 sm:gap-3 md:min-w-64">
             <Button asChild size="lg" className="rounded-md bg-white text-zinc-950 hover:bg-zinc-100">
               <a href="mailto:alfimaulana2003@gmail.com">
                 <Mail className="mr-2 h-4 w-4" />
-                alfimaulana2003@gmail.com
+                <span className="truncate">alfimaulana2003@gmail.com</span>
               </a>
             </Button>
             <Button asChild size="lg" variant="outline" className="rounded-md border-zinc-600 bg-transparent text-white hover:bg-white hover:text-zinc-950">
@@ -1103,10 +1105,10 @@ export default function Portfolio() {
         </div>
       </AnimatedSection>
 
-      <footer className="border-t border-zinc-200 px-4 py-8 dark:border-zinc-800">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-zinc-500 dark:text-zinc-400 sm:flex-row sm:items-center sm:justify-between">
+      <footer className="border-t border-zinc-200 px-4 py-6 dark:border-zinc-800 sm:py-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 text-xs text-zinc-500 dark:text-zinc-400 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:text-sm">
           <p>© 2026 Alfi Maulana Al-Farisi. Built with Next.js and Tailwind CSS.</p>
-          <div className="flex gap-4">
+          <div className="flex gap-3 sm:gap-4">
             <a className="hover:text-zinc-950 dark:hover:text-white" href="https://github.com/AlfiMaulanaA" target="_blank" rel="noreferrer">
               GitHub
             </a>
